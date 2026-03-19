@@ -394,3 +394,43 @@ For help, see: https://nodejs.org/en/docs/inspector
  GET / 200 in 263ms (compile: 49ms, render: 214ms)
  GET / 200 in 66ms (compile: 4ms, render: 62ms)
  GET / 200 in 61ms (compile: 4ms, render: 57ms)
+==========================================
+[2026-03-19 10:13:01] Starting: bun install
+==========================================
+[BUN] Installing dependencies...
+[0.09ms] ".env"
+bun install v1.3.10 (30e609e0)
+
+Checked 846 installs across 915 packages (no changes) [43.00ms]
+==========================================
+[2026-03-19 10:13:01] Completed: bun install
+[LOG] Step: bun install | Duration: 0s
+==========================================
+
+==========================================
+[2026-03-19 10:13:01] Starting: bun run db:push
+==========================================
+[BUN] Setting up database...
+$ prisma db push
+Failed to load config file "/home/z/my-project" as a TypeScript/JavaScript module. Error: Error: ENOTDIR: not a directory, lstat '/home/z/my-project/.config/prisma'
+error: script "db:push" exited with code 1
+==========================================
+[2026-03-19 10:23:12] Starting: bun install
+==========================================
+[BUN] Installing dependencies...
+[0.09ms] ".env"
+bun install v1.3.10 (30e609e0)
+
+Checked 846 installs across 915 packages (no changes) [45.00ms]
+==========================================
+[2026-03-19 10:23:12] Completed: bun install
+[LOG] Step: bun install | Duration: 0s
+==========================================
+
+==========================================
+[2026-03-19 10:23:12] Starting: bun run db:push
+==========================================
+[BUN] Setting up database...
+$ prisma db push
+Failed to load config file "/home/z/my-project" as a TypeScript/JavaScript module. Error: Error: ENOTDIR: not a directory, lstat '/home/z/my-project/.config/prisma'
+error: script "db:push" exited with code 1

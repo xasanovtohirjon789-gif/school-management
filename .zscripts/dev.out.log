@@ -434,3 +434,109 @@ Checked 846 installs across 915 packages (no changes) [45.00ms]
 $ prisma db push
 Failed to load config file "/home/z/my-project" as a TypeScript/JavaScript module. Error: Error: ENOTDIR: not a directory, lstat '/home/z/my-project/.config/prisma'
 error: script "db:push" exited with code 1
+==========================================
+[2026-03-19 11:22:56] Starting: bun install
+==========================================
+[BUN] Installing dependencies...
+[0.09ms] ".env"
+bun install v1.3.10 (30e609e0)
+
+Checked 846 installs across 915 packages (no changes) [46.00ms]
+==========================================
+[2026-03-19 11:22:56] Completed: bun install
+[LOG] Step: bun install | Duration: 0s
+==========================================
+
+==========================================
+[2026-03-19 11:22:56] Starting: bun run db:push
+==========================================
+[BUN] Setting up database...
+$ prisma db push
+Failed to load config file "/home/z/my-project" as a TypeScript/JavaScript module. Error: Error: ENOTDIR: not a directory, lstat '/home/z/my-project/.config/prisma'
+error: script "db:push" exited with code 1
+==========================================
+[2026-03-19 13:08:27] Starting: bun install
+==========================================
+[BUN] Installing dependencies...
+[0.11ms] ".env"
+bun install v1.3.10 (30e609e0)
+
+Checked 846 installs across 915 packages (no changes) [42.00ms]
+==========================================
+[2026-03-19 13:08:27] Completed: bun install
+[LOG] Step: bun install | Duration: 0s
+==========================================
+
+==========================================
+[2026-03-19 13:08:27] Starting: bun run db:push
+==========================================
+[BUN] Setting up database...
+$ prisma db push
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": SQLite database "custom.db" at "file:/home/z/my-project/db/custom.db"
+
+The database is already in sync with the Prisma schema.
+
+Running generate... (Use --skip-generate to skip the generators)
+[2K[1A[2K[GRunning generate... - Prisma Client
+[2K[1A[2K[G✔ Generated Prisma Client (v6.19.2) to ./node_modules/@prisma/client in 99ms
+
+==========================================
+[2026-03-19 13:08:28] Completed: bun run db:push
+[LOG] Step: bun run db:push | Duration: 1s
+==========================================
+
+==========================================
+[2026-03-19 13:08:28] Starting: Starting Next.js dev server
+==========================================
+[BUN] Starting development server...
+==========================================
+$ next dev -p 3000 2>&1 | tee dev.log
+[2026-03-19 13:08:28] Completed: Starting Next.js dev server
+[LOG] Step: Starting Next.js dev server | Duration: 0s
+==========================================
+
+==========================================
+[2026-03-19 13:08:28] Starting: Waiting for Next.js dev server
+==========================================
+Waiting for Next.js dev server to be ready on localhost:3000...
+Next.js dev server is ready!
+==========================================
+[2026-03-19 13:08:28] Completed: Waiting for Next.js dev server
+[LOG] Step: Waiting for Next.js dev server | Duration: 0s
+==========================================
+
+==========================================
+[2026-03-19 13:08:28] Starting: Health check
+==========================================
+[BUN] Performing health check...
+[BUN] Health check passed
+==========================================
+[2026-03-19 13:08:28] Completed: Health check
+[LOG] Step: Health check | Duration: 0s
+==========================================
+
+==========================================
+[2026-03-19 13:08:28] Starting: Starting mini-services
+==========================================
+Found mini-services directory, scanning for sub-services...
+Mini-services startup completed. Started 0 service(s).
+==========================================
+[2026-03-19 13:08:28] Completed: Starting mini-services
+[LOG] Step: Starting mini-services | Duration: 0s
+==========================================
+
+Next.js dev server is running in background (PID: 7350).
+Use 'kill 7350' to stop it.
+⨯ Failed to start server
+Error: listen EADDRINUSE: address already in use :::3000
+    at <unknown> (Error: listen EADDRINUSE: address already in use :::3000)
+    at new Promise (<anonymous>) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+[?25h

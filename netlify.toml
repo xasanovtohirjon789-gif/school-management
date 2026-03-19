@@ -1,14 +1,10 @@
 [build]
-  command = "npm run build"
+  command = "bun install && bun run build"
   publish = ".next"
 
 [build.environment]
   NODE_VERSION = "20"
+  BUN_VERSION = "latest"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
-
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200

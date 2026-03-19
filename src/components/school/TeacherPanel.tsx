@@ -1,0 +1,394 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useAuthStore } from '@/store/authStore'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { 
+  LogOut, 
+  Plus, 
+  Minus,
+  BookOpen, 
+  AlertCircle,
+  CheckCircle,
+  GraduationCap,
+  Coins,
+  History
+} from 'lucide-react'
+
+interface Student {
+  id: string
+  firstName: string
+  lastName: string
+  middleName?: string | null
+  coins: number
+  classId: string
+  class: { id: string; name: string }
+}
+
+interface ClassData {
+  id: string
+  name: string
+  schoolId: string
+  students: Student[]
+  classTeachers: { teacherId: string }[]
+}
+
+interface CoinTransaction {
+  id: string
+  amount: number
+  reason?: string | null
+  createdAt: string
+  student: {
+    firstName: string
+    lastName: string
+    middleName?: string | null
+  }
+}
+
+export function TeacherPanel() {
+  const { user, teacherInfo, logout } = useAuthStore()
+  const [classes, setClasses] = useState<ClassData[]>([])
+  const [selectedClassId, setSelectedClassId] = useState('')
+  const [students, setStudents] = useState<Student[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  
+  // Transaction history
+  const [showHistory, setShowHistory] = useState(false)
+  const [transactions, setTransactions] = useState<CoinTransaction[]>([])
+
+  const fetchTeacherClasses = async () => {
+    try {
+      if (!user?.id) return
+      
+      // Get teacher ID
+      const teachersRes = await fetch('/api/teachers')
+      const teachers = await teachersRes.json()
+      const teacher = teachers.find((t: any) => t.userId === user.id)
+      
+      if (!teacher) return
+      
+      const response = await fetch(`/api/classes?teacherId=${teacher.id}`)
+      const data = await response.json()
+      setClasses(data)
+      
+      if (data.length > 0) {
+        setSelectedClassId(data[0].id)
+        fetchStudents(data[0].id)
+      }
+    } catch (err) {
+      console.error('Fetch classes error:', err)
+    }
+  }
+
+  const fetchStudents = async (classId: string) => {
+    try {
+      const response = await fetch(`/api/students?classId=${classId}`)
+      const data = await response.json()
+      setStudents(data)
+    } catch (err) {
+      console.error('Fetch students error:', err)
+    }
+  }
+
+  // Fetch classes on mount
+  useEffect(() => {
+    fetchTeacherClasses()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user])
+
+  const handleCoinChange = async (studentId: string, amount: number, reason?: string) => {
+    setIsLoading(true)
+    setError('')
+    
+    try {
+      // Get teacher ID
+      const teachersRes = await fetch('/api/teachers')
+      const teachers = await teachersRes.json()
+      const teacher = teachers.find((t: any) => t.userId === user?.id)
+      
+      if (!teacher) {
+        setError('O\'qituvchi topilmadi')
+        setIsLoading(false)
+        return
+      }
+      
+      const response = await fetch('/api/coins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId,
+          teacherId: teacher.id,
+          amount,
+          reason: reason || (amount > 0 ? 'Mukofot' : 'Jazo'),
+        }),
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        setError(data.error || 'Xatolik yuz berdi')
+        setIsLoading(false)
+        return
+      }
+      
+      // Update student in list
+      setStudents(prev => prev.map(s => 
+        s.id === studentId ? { ...s, coins: s.coins + amount } : s
+      ))
+      
+      setSuccess(`${amount > 0 ? '+' : ''}${amount} coin muvaffaqiyatli qo'shildi`)
+    } catch (err) {
+      setError('Server xatosi')
+    }
+    setIsLoading(false)
+  }
+
+  const fetchTransactions = async () => {
+    try {
+      // Get teacher ID
+      const teachersRes = await fetch('/api/teachers')
+      const teachers = await teachersRes.json()
+      const teacher = teachers.find((t: any) => t.userId === user?.id)
+      
+      if (!teacher) return
+      
+      // Get student IDs from current class
+      const studentIds = students.map(s => s.id)
+      
+      const response = await fetch('/api/coins')
+      const allTransactions = await response.json()
+      
+      // Filter by this teacher
+      const teacherTransactions = allTransactions.filter(
+        (t: any) => t.teacherId === teacher.id
+      )
+      
+      setTransactions(teacherTransactions)
+    } catch (err) {
+      console.error('Fetch transactions error:', err)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      {/* Header */}
+      <header className="bg-black/30 backdrop-blur-lg border-b border-white/10">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-emerald-500 rounded-lg flex items-center justify-center">
+              <BookOpen className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-white">O'qituvchi Paneli</h1>
+              <p className="text-sm text-gray-400">
+                {teacherInfo?.subject} | {user?.name}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowHistory(!showHistory)
+                if (!showHistory) fetchTransactions()
+              }}
+              className="border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
+            >
+              <History className="w-4 h-4 mr-2" />
+              Tarix
+            </Button>
+            <Button
+              variant="outline"
+              onClick={logout}
+              className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Chiqish
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <div className="container mx-auto px-4 py-6">
+        {/* Alerts */}
+        {error && (
+          <div className="flex items-center gap-2 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 mb-4">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            {error}
+            <button onClick={() => setError('')} className="ml-auto">✕</button>
+          </div>
+        )}
+        {success && (
+          <div className="flex items-center gap-2 p-4 bg-emerald-500/20 border border-emerald-500/50 rounded-lg text-emerald-200 mb-4">
+            <CheckCircle className="w-5 h-5 flex-shrink-0" />
+            {success}
+            <button onClick={() => setSuccess('')} className="ml-auto">✕</button>
+          </div>
+        )}
+
+        {/* Transaction History Modal */}
+        {showHistory && (
+          <Card className="bg-white/10 backdrop-blur-lg border-white/20 mb-6">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <History className="w-5 h-5" />
+                Coin Tarixi
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {transactions.map(t => (
+                  <div key={t.id} className="flex items-center justify-between p-2 bg-white/5 rounded">
+                    <div>
+                      <span className="text-white">
+                        {t.student.lastName} {t.student.firstName}
+                      </span>
+                      <span className="text-gray-400 text-sm ml-2">
+                        {new Date(t.createdAt).toLocaleDateString('uz-UZ')}
+                      </span>
+                    </div>
+                    <span className={t.amount > 0 ? 'text-emerald-400' : 'text-red-400'}>
+                      {t.amount > 0 ? '+' : ''}{t.amount}
+                    </span>
+                  </div>
+                ))}
+                {transactions.length === 0 && (
+                  <p className="text-center text-gray-400 py-4">Tarix yo'q</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Class Selector */}
+        {classes.length > 0 && (
+          <div className="mb-6">
+            <label className="text-sm text-gray-300 mb-2 block">Sinfni tanlang</label>
+            <div className="flex flex-wrap gap-2">
+              {classes.map(cls => (
+                <Button
+                  key={cls.id}
+                  variant={selectedClassId === cls.id ? 'default' : 'outline'}
+                  onClick={() => {
+                    setSelectedClassId(cls.id)
+                    fetchStudents(cls.id)
+                  }}
+                  className={selectedClassId === cls.id ? 'bg-emerald-500 hover:bg-emerald-600' : 'border-white/20 text-white'}
+                >
+                  {cls.name}
+                  <Badge variant="secondary" className="ml-2 bg-white/20">
+                    {cls.students?.length || 0}
+                  </Badge>
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* No Classes Message */}
+        {classes.length === 0 && (
+          <Card className="bg-white/10 backdrop-blur-lg border-white/20">
+            <CardContent className="py-12 text-center">
+              <GraduationCap className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-white mb-2">Sinf biriktirilmagan</h3>
+              <p className="text-gray-400">
+                Sizga hali hech qanday sinf biriktirilmagan. 
+                Direktoringiz bilan bog'laning.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Students Table */}
+        {selectedClassId && students.length > 0 && (
+          <Card className="bg-white/10 backdrop-blur-lg border-white/20">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <GraduationCap className="w-5 h-5" />
+                {classes.find(c => c.id === selectedClassId)?.name} - O'quvchilar
+              </CardTitle>
+              <CardDescription className="text-gray-400">
+                Jami: {students.length} ta o'quvchi
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-white/20">
+                      <th className="text-left py-3 px-4 text-gray-300 font-medium">№</th>
+                      <th className="text-left py-3 px-4 text-gray-300 font-medium">F.I.O.</th>
+                      <th className="text-center py-3 px-4 text-gray-300 font-medium">
+                        <div className="flex items-center justify-center gap-1">
+                          <Coins className="w-4 h-4 text-amber-400" />
+                          Coin
+                        </div>
+                      </th>
+                      <th className="text-center py-3 px-4 text-gray-300 font-medium">Amallar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {students.map((student, index) => (
+                      <tr key={student.id} className="border-b border-white/10 hover:bg-white/5">
+                        <td className="py-3 px-4 text-gray-400">{index + 1}</td>
+                        <td className="py-3 px-4 text-white font-medium">
+                          {student.lastName} {student.firstName} {student.middleName || ''}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 font-semibold">
+                            <Coins className="w-4 h-4" />
+                            {student.coins}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleCoinChange(student.id, 1)}
+                              disabled={isLoading}
+                              className="border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/20 w-10 h-10 p-0"
+                            >
+                              <Plus className="w-5 h-5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleCoinChange(student.id, -1)}
+                              disabled={isLoading}
+                              className="border-red-500/50 text-red-400 hover:bg-red-500/20 w-10 h-10 p-0"
+                            >
+                              <Minus className="w-5 h-5" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Empty Students */}
+        {selectedClassId && students.length === 0 && (
+          <Card className="bg-white/10 backdrop-blur-lg border-white/20">
+            <CardContent className="py-12 text-center">
+              <GraduationCap className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-white mb-2">O'quvchilar yo'q</h3>
+              <p className="text-gray-400">
+                Bu sinfda hali o'quvchilar qo'shilmagan.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  )
+}

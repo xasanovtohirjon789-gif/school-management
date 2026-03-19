@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,13 +9,19 @@ import {
   LogOut, 
   Plus, 
   Minus,
-  BookOpen, 
+  BookOpen,
   AlertCircle,
   CheckCircle,
   GraduationCap,
   Coins,
   History
 } from 'lucide-react'
+
+interface TeacherPanelProps {
+  user: { id: string; login: string; name: string; role: string }
+  teacherInfo: { subject: string; classes: { id: string; name: string }[] } | null
+  onLogout: () => void
+}
 
 interface Student {
   id: string
@@ -48,42 +53,45 @@ interface CoinTransaction {
   }
 }
 
-export function TeacherPanel() {
-  const { user, teacherInfo, logout } = useAuthStore()
+export function TeacherPanel({ user, teacherInfo, onLogout }: TeacherPanelProps) {
   const [classes, setClasses] = useState<ClassData[]>([])
   const [selectedClassId, setSelectedClassId] = useState('')
   const [students, setStudents] = useState<Student[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  
-  // Transaction history
   const [showHistory, setShowHistory] = useState(false)
   const [transactions, setTransactions] = useState<CoinTransaction[]>([])
+  const [teacherId, setTeacherId] = useState('')
 
-  const fetchTeacherClasses = async () => {
-    try {
-      if (!user?.id) return
-      
-      // Get teacher ID
-      const teachersRes = await fetch('/api/teachers')
-      const teachers = await teachersRes.json()
-      const teacher = teachers.find((t: any) => t.userId === user.id)
-      
-      if (!teacher) return
-      
-      const response = await fetch(`/api/classes?teacherId=${teacher.id}`)
-      const data = await response.json()
-      setClasses(data)
-      
-      if (data.length > 0) {
-        setSelectedClassId(data[0].id)
-        fetchStudents(data[0].id)
+  useEffect(() => {
+    const fetchTeacherData = async () => {
+      try {
+        // Get teacher ID
+        const teachersRes = await fetch('/api/teachers')
+        const teachers = await teachersRes.json()
+        const teacher = teachers.find((t: any) => t.userId === user?.id)
+        
+        if (teacher) {
+          setTeacherId(teacher.id)
+          
+          // Fetch classes for this teacher
+          const classesRes = await fetch(`/api/classes?teacherId=${teacher.id}`)
+          const classesData = await classesRes.json()
+          setClasses(classesData)
+          
+          if (classesData.length > 0) {
+            setSelectedClassId(classesData[0].id)
+            fetchStudents(classesData[0].id)
+          }
+        }
+      } catch (err) {
+        console.error('Fetch error:', err)
       }
-    } catch (err) {
-      console.error('Fetch classes error:', err)
     }
-  }
+    
+    fetchTeacherData()
+  }, [user])
 
   const fetchStudents = async (classId: string) => {
     try {
@@ -95,48 +103,29 @@ export function TeacherPanel() {
     }
   }
 
-  // Fetch classes on mount
-  useEffect(() => {
-    fetchTeacherClasses()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user])
-
-  const handleCoinChange = async (studentId: string, amount: number, reason?: string) => {
+  const handleCoinChange = async (studentId: string, amount: number) => {
     setIsLoading(true)
     setError('')
     
     try {
-      // Get teacher ID
-      const teachersRes = await fetch('/api/teachers')
-      const teachers = await teachersRes.json()
-      const teacher = teachers.find((t: any) => t.userId === user?.id)
-      
-      if (!teacher) {
-        setError('O\'qituvchi topilmadi')
-        setIsLoading(false)
-        return
-      }
-      
       const response = await fetch('/api/coins', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           studentId,
-          teacherId: teacher.id,
+          teacherId: teacherId,
           amount,
-          reason: reason || (amount > 0 ? 'Mukofot' : 'Jazo'),
+          reason: amount > 0 ? 'Mukofot' : 'Jazo',
         }),
       })
       
-      const data = await response.json()
-      
       if (!response.ok) {
+        const data = await response.json()
         setError(data.error || 'Xatolik yuz berdi')
         setIsLoading(false)
         return
       }
       
-      // Update student in list
       setStudents(prev => prev.map(s => 
         s.id === studentId ? { ...s, coins: s.coins + amount } : s
       ))
@@ -150,24 +139,11 @@ export function TeacherPanel() {
 
   const fetchTransactions = async () => {
     try {
-      // Get teacher ID
-      const teachersRes = await fetch('/api/teachers')
-      const teachers = await teachersRes.json()
-      const teacher = teachers.find((t: any) => t.userId === user?.id)
-      
-      if (!teacher) return
-      
-      // Get student IDs from current class
-      const studentIds = students.map(s => s.id)
-      
       const response = await fetch('/api/coins')
       const allTransactions = await response.json()
-      
-      // Filter by this teacher
       const teacherTransactions = allTransactions.filter(
-        (t: any) => t.teacherId === teacher.id
+        (t: any) => t.teacherId === teacherId
       )
-      
       setTransactions(teacherTransactions)
     } catch (err) {
       console.error('Fetch transactions error:', err)
@@ -176,7 +152,6 @@ export function TeacherPanel() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      {/* Header */}
       <header className="bg-black/30 backdrop-blur-lg border-b border-white/10">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -184,7 +159,7 @@ export function TeacherPanel() {
               <BookOpen className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white">O'qituvchi Paneli</h1>
+              <h1 className="text-xl font-bold text-white">O&apos;qituvchi Paneli</h1>
               <p className="text-sm text-gray-400">
                 {teacherInfo?.subject} | {user?.name}
               </p>
@@ -204,7 +179,7 @@ export function TeacherPanel() {
             </Button>
             <Button
               variant="outline"
-              onClick={logout}
+              onClick={onLogout}
               className="border-red-500/50 text-red-400 hover:bg-red-500/20"
             >
               <LogOut className="w-4 h-4 mr-2" />
@@ -215,7 +190,6 @@ export function TeacherPanel() {
       </header>
 
       <div className="container mx-auto px-4 py-6">
-        {/* Alerts */}
         {error && (
           <div className="flex items-center gap-2 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 mb-4">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
@@ -231,7 +205,6 @@ export function TeacherPanel() {
           </div>
         )}
 
-        {/* Transaction History Modal */}
         {showHistory && (
           <Card className="bg-white/10 backdrop-blur-lg border-white/20 mb-6">
             <CardHeader>
@@ -258,14 +231,13 @@ export function TeacherPanel() {
                   </div>
                 ))}
                 {transactions.length === 0 && (
-                  <p className="text-center text-gray-400 py-4">Tarix yo'q</p>
+                  <p className="text-center text-gray-400 py-4">Tarix yo&apos;q</p>
                 )}
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Class Selector */}
         {classes.length > 0 && (
           <div className="mb-6">
             <label className="text-sm text-gray-300 mb-2 block">Sinfni tanlang</label>
@@ -290,7 +262,6 @@ export function TeacherPanel() {
           </div>
         )}
 
-        {/* No Classes Message */}
         {classes.length === 0 && (
           <Card className="bg-white/10 backdrop-blur-lg border-white/20">
             <CardContent className="py-12 text-center">
@@ -298,22 +269,21 @@ export function TeacherPanel() {
               <h3 className="text-xl font-semibold text-white mb-2">Sinf biriktirilmagan</h3>
               <p className="text-gray-400">
                 Sizga hali hech qanday sinf biriktirilmagan. 
-                Direktoringiz bilan bog'laning.
+                Direktoringiz bilan bog&apos;laning.
               </p>
             </CardContent>
           </Card>
         )}
 
-        {/* Students Table */}
         {selectedClassId && students.length > 0 && (
           <Card className="bg-white/10 backdrop-blur-lg border-white/20">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
                 <GraduationCap className="w-5 h-5" />
-                {classes.find(c => c.id === selectedClassId)?.name} - O'quvchilar
+                {classes.find(c => c.id === selectedClassId)?.name} - O&apos;quvchilar
               </CardTitle>
               <CardDescription className="text-gray-400">
-                Jami: {students.length} ta o'quvchi
+                Jami: {students.length} ta o&apos;quvchi
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -376,14 +346,13 @@ export function TeacherPanel() {
           </Card>
         )}
 
-        {/* Empty Students */}
         {selectedClassId && students.length === 0 && (
           <Card className="bg-white/10 backdrop-blur-lg border-white/20">
             <CardContent className="py-12 text-center">
               <GraduationCap className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-white mb-2">O'quvchilar yo'q</h3>
+              <h3 className="text-xl font-semibold text-white mb-2">O&apos;quvchilar yo&apos;q</h3>
               <p className="text-gray-400">
-                Bu sinfda hali o'quvchilar qo'shilmagan.
+                Bu sinfda hali o&apos;quvchilar qo&apos;shilmagan.
               </p>
             </CardContent>
           </Card>

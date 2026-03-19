@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,22 +11,23 @@ import {
   Trash2, 
   Users, 
   School, 
-  UserCog,
+  BookOpen,
   AlertCircle,
   CheckCircle,
-  BookOpen,
   GraduationCap
 } from 'lucide-react'
+
+interface DirectorPanelProps {
+  user: { id: string; login: string; name: string; role: string }
+  directorInfo: { schoolId: string; schoolName: string } | null
+  onLogout: () => void
+}
 
 interface Teacher {
   id: string
   userId: string
   subject: string
-  user: {
-    id: string
-    login: string
-    name: string
-  }
+  user: { id: string; login: string; name: string }
   classTeacher: { id: string; class: { id: string; name: string } }[]
 }
 
@@ -36,7 +36,6 @@ interface ClassData {
   name: string
   schoolId: string
   _count?: { students: number }
-  classTeachers?: { teacherId: string; teacher: { user: { name: string }; subject: string } }[]
 }
 
 interface Student {
@@ -48,9 +47,8 @@ interface Student {
   classId: string
 }
 
-export function DirectorPanel() {
-  const { user, directorInfo, logout } = useAuthStore()
-  const [activeTab, setActiveTab] = useState<'teachers' | 'classes' | 'students'>('teachers')
+export function DirectorPanel({ user, directorInfo, onLogout }: DirectorPanelProps) {
+  const [activeTab, setActiveTab] = useState<'teachers' | 'classes' | 'students'>('classes')
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [classes, setClasses] = useState<ClassData[]>([])
   const [students, setStudents] = useState<Student[]>([])
@@ -58,7 +56,6 @@ export function DirectorPanel() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   
-  // Form states
   const [newTeacherLogin, setNewTeacherLogin] = useState('')
   const [newTeacherPassword, setNewTeacherPassword] = useState('')
   const [newTeacherName, setNewTeacherName] = useState('')
@@ -67,45 +64,42 @@ export function DirectorPanel() {
   const [newStudentFirstName, setNewStudentFirstName] = useState('')
   const [newStudentLastName, setNewStudentLastName] = useState('')
   const [newStudentMiddleName, setNewStudentMiddleName] = useState('')
-  const [selectedClassId, setSelectedClassId] = useState('')
   const [selectedStudentClassId, setSelectedStudentClassId] = useState('')
-  
-  // View states
-  const [selectedClassForView, setSelectedClassForView] = useState<ClassData | null>(null)
+  const [directorId, setDirectorId] = useState('')
 
-  const fetchTeachers = async () => {
-    try {
-      // Get director info first
-      const currentUser = useAuthStore.getState().user
-      if (!currentUser) return
-      
-      const directorsRes = await fetch('/api/directors')
-      const directors = await directorsRes.json()
-      const director = directors.find((d: any) => d.userId === currentUser.id)
-      
-      if (!director) return
-      
-      const response = await fetch(`/api/teachers?directorId=${director.id}`)
-      const data = await response.json()
-      setTeachers(data)
-    } catch (err) {
-      console.error('Fetch teachers error:', err)
-    }
-  }
-
-  const fetchClasses = async () => {
-    try {
-      const response = await fetch(`/api/classes?schoolId=${directorInfo?.schoolId}`)
-      const data = await response.json()
-      setClasses(data)
-      if (data.length > 0 && !selectedClassId) {
-        setSelectedClassId(data[0].id)
-        setSelectedStudentClassId(data[0].id)
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Get director ID
+        const directorsRes = await fetch('/api/directors')
+        const directors = await directorsRes.json()
+        const director = directors.find((d: any) => d.userId === user?.id)
+        
+        if (director) {
+          setDirectorId(director.id)
+          
+          // Fetch teachers for this director
+          const teachersRes = await fetch(`/api/teachers?directorId=${director.id}`)
+          const teachersData = await teachersRes.json()
+          setTeachers(teachersData)
+        }
+        
+        // Fetch classes for this school
+        if (directorInfo?.schoolId) {
+          const classesRes = await fetch(`/api/classes?schoolId=${directorInfo.schoolId}`)
+          const classesData = await classesRes.json()
+          setClasses(classesData)
+          if (classesData.length > 0) {
+            setSelectedStudentClassId(classesData[0].id)
+          }
+        }
+      } catch (err) {
+        console.error('Fetch error:', err)
       }
-    } catch (err) {
-      console.error('Fetch classes error:', err)
     }
-  }
+    
+    fetchData()
+  }, [user, directorInfo])
 
   const fetchStudents = async (classId: string) => {
     try {
@@ -117,91 +111,17 @@ export function DirectorPanel() {
     }
   }
 
-  // Fetch data on mount
   useEffect(() => {
-    if (directorInfo?.schoolId) {
-      fetchTeachers()
-      fetchClasses()
+    if (selectedStudentClassId) {
+      fetchStudents(selectedStudentClassId)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [directorInfo])
-
-  const handleCreateTeacher = async () => {
-    if (!newTeacherLogin.trim() || !newTeacherPassword.trim() || !newTeacherName.trim() || !newTeacherSubject.trim()) {
-      setError('Barcha maydonlarni to\'ldiring')
-      return
-    }
-    
-    setIsLoading(true)
-    setError('')
-    
-    try {
-      // Get director ID
-      const user = useAuthStore.getState().user
-      const directorsRes = await fetch('/api/directors')
-      const directors = await directorsRes.json()
-      const director = directors.find((d: any) => d.userId === user?.id)
-      
-      if (!director) {
-        setError('Direktor topilmadi')
-        setIsLoading(false)
-        return
-      }
-      
-      const response = await fetch('/api/teachers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          login: newTeacherLogin,
-          password: newTeacherPassword,
-          name: newTeacherName,
-          subject: newTeacherSubject,
-          directorId: director.id,
-        }),
-      })
-      
-      const data = await response.json()
-      
-      if (!response.ok) {
-        setError(data.error || 'Xatolik yuz berdi')
-        setIsLoading(false)
-        return
-      }
-      
-      setSuccess('O\'qituvchi muvaffaqiyatli qo\'shildi')
-      setNewTeacherLogin('')
-      setNewTeacherPassword('')
-      setNewTeacherName('')
-      setNewTeacherSubject('')
-      fetchTeachers()
-    } catch (err) {
-      setError('Server xatosi')
-    }
-    setIsLoading(false)
-  }
-
-  const handleDeleteTeacher = async (teacherId: string) => {
-    if (!confirm('O\'qituvchini o\'chirishga ishonchingiz komilmi?')) return
-    
-    try {
-      await fetch('/api/teachers', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: teacherId }),
-      })
-      setSuccess('O\'qituvchi o\'chirildi')
-      fetchTeachers()
-    } catch (err) {
-      setError('O\'chirishda xatolik')
-    }
-  }
+  }, [selectedStudentClassId])
 
   const handleCreateClass = async () => {
     if (!newClassName.trim()) {
       setError('Sinf nomini kiriting')
       return
     }
-    
     setIsLoading(true)
     setError('')
     
@@ -215,9 +135,8 @@ export function DirectorPanel() {
         }),
       })
       
-      const data = await response.json()
-      
       if (!response.ok) {
+        const data = await response.json()
         setError(data.error || 'Xatolik yuz berdi')
         setIsLoading(false)
         return
@@ -225,27 +144,57 @@ export function DirectorPanel() {
       
       setSuccess('Sinf muvaffaqiyatli qo\'shildi')
       setNewClassName('')
-      fetchClasses()
+      // Refetch classes
+      const classesRes = await fetch(`/api/classes?schoolId=${directorInfo?.schoolId}`)
+      const classesData = await classesRes.json()
+      setClasses(classesData)
     } catch (err) {
       setError('Server xatosi')
     }
     setIsLoading(false)
   }
 
-  const handleDeleteClass = async (classId: string) => {
-    if (!confirm('Sinfni o\'chirishga ishonchingiz komilmi?')) return
+  const handleCreateTeacher = async () => {
+    if (!newTeacherLogin.trim() || !newTeacherPassword.trim() || !newTeacherName.trim() || !newTeacherSubject.trim()) {
+      setError('Barcha maydonlarni to\'ldiring')
+      return
+    }
+    setIsLoading(true)
+    setError('')
     
     try {
-      await fetch('/api/classes', {
-        method: 'DELETE',
+      const response = await fetch('/api/teachers', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: classId }),
+        body: JSON.stringify({
+          login: newTeacherLogin,
+          password: newTeacherPassword,
+          name: newTeacherName,
+          subject: newTeacherSubject,
+          directorId: directorId,
+        }),
       })
-      setSuccess('Sinf o\'chirildi')
-      fetchClasses()
+      
+      if (!response.ok) {
+        const data = await response.json()
+        setError(data.error || 'Xatolik yuz berdi')
+        setIsLoading(false)
+        return
+      }
+      
+      setSuccess('O\'qituvchi muvaffaqiyatli qo\'shildi')
+      setNewTeacherLogin('')
+      setNewTeacherPassword('')
+      setNewTeacherName('')
+      setNewTeacherSubject('')
+      // Refetch teachers
+      const teachersRes = await fetch(`/api/teachers?directorId=${directorId}`)
+      const teachersData = await teachersRes.json()
+      setTeachers(teachersData)
     } catch (err) {
-      setError('O\'chirishda xatolik')
+      setError('Server xatosi')
     }
+    setIsLoading(false)
   }
 
   const handleCreateStudent = async () => {
@@ -253,7 +202,6 @@ export function DirectorPanel() {
       setError('Ism, familiya va sinfni kiriting')
       return
     }
-    
     setIsLoading(true)
     setError('')
     
@@ -269,9 +217,8 @@ export function DirectorPanel() {
         }),
       })
       
-      const data = await response.json()
-      
       if (!response.ok) {
+        const data = await response.json()
         setError(data.error || 'Xatolik yuz berdi')
         setIsLoading(false)
         return
@@ -288,7 +235,7 @@ export function DirectorPanel() {
     setIsLoading(false)
   }
 
-  const handleDeleteStudent = async (studentId: string, classId: string) => {
+  const handleDeleteStudent = async (studentId: string) => {
     if (!confirm('O\'quvchini o\'chirishga ishonchingiz komilmi?')) return
     
     try {
@@ -298,7 +245,7 @@ export function DirectorPanel() {
         body: JSON.stringify({ id: studentId }),
       })
       setSuccess('O\'quvchi o\'chirildi')
-      fetchStudents(classId)
+      fetchStudents(selectedStudentClassId)
     } catch (err) {
       setError('O\'chirishda xatolik')
     }
@@ -306,7 +253,6 @@ export function DirectorPanel() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      {/* Header */}
       <header className="bg-black/30 backdrop-blur-lg border-b border-white/10">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -320,7 +266,7 @@ export function DirectorPanel() {
           </div>
           <Button
             variant="outline"
-            onClick={logout}
+            onClick={onLogout}
             className="border-red-500/50 text-red-400 hover:bg-red-500/20"
           >
             <LogOut className="w-4 h-4 mr-2" />
@@ -330,16 +276,7 @@ export function DirectorPanel() {
       </header>
 
       <div className="container mx-auto px-4 py-6">
-        {/* Tabs */}
         <div className="flex flex-wrap gap-2 mb-6">
-          <Button
-            variant={activeTab === 'teachers' ? 'default' : 'outline'}
-            onClick={() => setActiveTab('teachers')}
-            className={activeTab === 'teachers' ? 'bg-emerald-500 hover:bg-emerald-600' : 'border-white/20 text-white'}
-          >
-            <Users className="w-4 h-4 mr-2" />
-            O'qituvchilar
-          </Button>
           <Button
             variant={activeTab === 'classes' ? 'default' : 'outline'}
             onClick={() => setActiveTab('classes')}
@@ -349,16 +286,23 @@ export function DirectorPanel() {
             Sinflar
           </Button>
           <Button
+            variant={activeTab === 'teachers' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('teachers')}
+            className={activeTab === 'teachers' ? 'bg-emerald-500 hover:bg-emerald-600' : 'border-white/20 text-white'}
+          >
+            <Users className="w-4 h-4 mr-2" />
+            O&apos;qituvchilar
+          </Button>
+          <Button
             variant={activeTab === 'students' ? 'default' : 'outline'}
             onClick={() => setActiveTab('students')}
             className={activeTab === 'students' ? 'bg-emerald-500 hover:bg-emerald-600' : 'border-white/20 text-white'}
           >
             <GraduationCap className="w-4 h-4 mr-2" />
-            O'quvchilar
+            O&apos;quvchilar
           </Button>
         </div>
 
-        {/* Alerts */}
         {error && (
           <div className="flex items-center gap-2 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 mb-4">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
@@ -374,15 +318,68 @@ export function DirectorPanel() {
           </div>
         )}
 
-        {/* Teachers Tab */}
-        {activeTab === 'teachers' && (
+        {activeTab === 'classes' && (
           <div className="grid md:grid-cols-2 gap-6">
-            {/* Add Teacher Form */}
             <Card className="bg-white/10 backdrop-blur-lg border-white/20">
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
                   <Plus className="w-5 h-5" />
-                  Yangi O'qituvchi Qo'shish
+                  Yangi Sinf Qo&apos;shish
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Input
+                  placeholder="Sinf nomi (masalan: 9-A)"
+                  value={newClassName}
+                  onChange={(e) => setNewClassName(e.target.value)}
+                  className="bg-white/10 border-white/20 text-white placeholder:text-gray-400"
+                />
+                <Button
+                  onClick={handleCreateClass}
+                  disabled={isLoading}
+                  className="w-full bg-emerald-500 hover:bg-emerald-600"
+                >
+                  {isLoading ? 'Qo\'shilmoqda...' : 'Sinf Qo\'shish'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/10 backdrop-blur-lg border-white/20">
+              <CardHeader>
+                <CardTitle className="text-white">Sinflar Ro&apos;yxati</CardTitle>
+                <CardDescription className="text-gray-400">
+                  Jami: {classes.length} ta sinf
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {classes.map(cls => (
+                    <div
+                      key={cls.id}
+                      className="p-3 bg-white/5 rounded-lg border border-white/10 flex items-center justify-between"
+                    >
+                      <p className="font-medium text-white">{cls.name}</p>
+                      <Badge variant="secondary" className="bg-amber-500/20 text-amber-300">
+                        {cls._count?.students || 0} o&apos;quvchi
+                      </Badge>
+                    </div>
+                  ))}
+                  {classes.length === 0 && (
+                    <p className="text-center text-gray-400 py-4">Sinflar yo&apos;q</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {activeTab === 'teachers' && (
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card className="bg-white/10 backdrop-blur-lg border-white/20">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Plus className="w-5 h-5" />
+                  Yangi O&apos;qituvchi Qo&apos;shish
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -420,12 +417,11 @@ export function DirectorPanel() {
               </CardContent>
             </Card>
 
-            {/* Teachers List */}
             <Card className="bg-white/10 backdrop-blur-lg border-white/20">
               <CardHeader>
-                <CardTitle className="text-white">O'qituvchilar Ro'yxati</CardTitle>
+                <CardTitle className="text-white">O&apos;qituvchilar Ro&apos;yxati</CardTitle>
                 <CardDescription className="text-gray-400">
-                  Jami: {teachers.length} ta o'qituvchi
+                  Jami: {teachers.length} ta o&apos;qituvchi
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -433,28 +429,15 @@ export function DirectorPanel() {
                   {teachers.map(teacher => (
                     <div
                       key={teacher.id}
-                      className="p-3 bg-white/5 rounded-lg border border-white/10 flex items-center justify-between"
+                      className="p-3 bg-white/5 rounded-lg border border-white/10"
                     >
-                      <div>
-                        <p className="font-medium text-white">{teacher.user.name}</p>
-                        <p className="text-sm text-emerald-400">{teacher.subject}</p>
-                        <p className="text-sm text-gray-400">Login: {teacher.user.login}</p>
-                        <p className="text-xs text-gray-500">
-                          {teacher.classTeacher.length} ta sinf
-                        </p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDeleteTeacher(teacher.id)}
-                        className="text-red-400 hover:bg-red-500/20"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <p className="font-medium text-white">{teacher.user.name}</p>
+                      <p className="text-sm text-emerald-400">{teacher.subject}</p>
+                      <p className="text-sm text-gray-400">Login: {teacher.user.login}</p>
                     </div>
                   ))}
                   {teachers.length === 0 && (
-                    <p className="text-center text-gray-400 py-4">O'qituvchilar yo'q</p>
+                    <p className="text-center text-gray-400 py-4">O&apos;qituvchilar yo&apos;q</p>
                   )}
                 </div>
               </CardContent>
@@ -462,99 +445,19 @@ export function DirectorPanel() {
           </div>
         )}
 
-        {/* Classes Tab */}
-        {activeTab === 'classes' && (
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Add Class Form */}
-            <Card className="bg-white/10 backdrop-blur-lg border-white/20">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Plus className="w-5 h-5" />
-                  Yangi Sinf Qo'shish
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Input
-                  placeholder="Sinf nomi (masalan: 9-A)"
-                  value={newClassName}
-                  onChange={(e) => setNewClassName(e.target.value)}
-                  className="bg-white/10 border-white/20 text-white placeholder:text-gray-400"
-                />
-                <Button
-                  onClick={handleCreateClass}
-                  disabled={isLoading}
-                  className="w-full bg-emerald-500 hover:bg-emerald-600"
-                >
-                  {isLoading ? 'Qo\'shilmoqda...' : 'Sinf Qo\'shish'}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Classes List */}
-            <Card className="bg-white/10 backdrop-blur-lg border-white/20">
-              <CardHeader>
-                <CardTitle className="text-white">Sinflar Ro'yxati</CardTitle>
-                <CardDescription className="text-gray-400">
-                  Jami: {classes.length} ta sinf
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {classes.map(cls => (
-                    <div
-                      key={cls.id}
-                      className="p-3 bg-white/5 rounded-lg border border-white/10 flex items-center justify-between"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-white">{cls.name}</p>
-                          <Badge variant="secondary" className="bg-amber-500/20 text-amber-300">
-                            {cls._count?.students || 0} o'quvchi
-                          </Badge>
-                        </div>
-                        {cls.classTeachers && cls.classTeachers.length > 0 && (
-                          <p className="text-xs text-gray-400 mt-1">
-                            {cls.classTeachers.map(ct => ct.teacher.user.name).join(', ')}
-                          </p>
-                        )}
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDeleteClass(cls.id)}
-                        className="text-red-400 hover:bg-red-500/20"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  {classes.length === 0 && (
-                    <p className="text-center text-gray-400 py-4">Sinflar yo'q</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Students Tab */}
         {activeTab === 'students' && (
           <div className="grid md:grid-cols-2 gap-6">
-            {/* Add Student Form */}
             <Card className="bg-white/10 backdrop-blur-lg border-white/20">
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
                   <Plus className="w-5 h-5" />
-                  Yangi O'quvchi Qo'shish
+                  Yangi O&apos;quvchi Qo&apos;shish
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <select
                   value={selectedStudentClassId}
-                  onChange={(e) => {
-                    setSelectedStudentClassId(e.target.value)
-                    fetchStudents(e.target.value)
-                  }}
+                  onChange={(e) => setSelectedStudentClassId(e.target.value)}
                   className="w-full p-2 rounded-lg bg-white/10 border border-white/20 text-white"
                 >
                   <option value="" className="bg-slate-800">Sinf tanlang</option>
@@ -592,15 +495,14 @@ export function DirectorPanel() {
               </CardContent>
             </Card>
 
-            {/* Students List */}
             <Card className="bg-white/10 backdrop-blur-lg border-white/20">
               <CardHeader>
-                <CardTitle className="text-white">O'quvchilar Ro'yxati</CardTitle>
+                <CardTitle className="text-white">O&apos;quvchilar Ro&apos;yxati</CardTitle>
                 <CardDescription className="text-gray-400">
                   {selectedStudentClassId ? (
                     <span>
                       {classes.find(c => c.id === selectedStudentClassId)?.name} sinfi | 
-                      Jami: {students.length} ta o'quvchi
+                      Jami: {students.length} ta o&apos;quvchi
                     </span>
                   ) : 'Sinf tanlang'}
                 </CardDescription>
@@ -624,7 +526,7 @@ export function DirectorPanel() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => handleDeleteStudent(student.id, selectedStudentClassId)}
+                        onClick={() => handleDeleteStudent(student.id)}
                         className="text-red-400 hover:bg-red-500/20"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -632,7 +534,7 @@ export function DirectorPanel() {
                     </div>
                   ))}
                   {students.length === 0 && selectedStudentClassId && (
-                    <p className="text-center text-gray-400 py-4">O'quvchilar yo'q</p>
+                    <p className="text-center text-gray-400 py-4">O&apos;quvchilar yo&apos;q</p>
                   )}
                   {!selectedStudentClassId && (
                     <p className="text-center text-gray-400 py-4">Sinf tanlang</p>

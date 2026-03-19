@@ -1,14 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { GraduationCap, Eye, EyeOff, AlertCircle } from 'lucide-react'
 
-export function LoginForm() {
-  const { login } = useAuthStore()
+interface LoginFormProps {
+  onLogin: (user: any, directorInfo?: any, teacherInfo?: any) => void
+}
+
+export function LoginForm({ onLogin }: LoginFormProps) {
   const [loginValue, setLoginValue] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -35,7 +37,7 @@ export function LoginForm() {
         return
       }
 
-      login(data.user, data.directorInfo, data.teacherInfo)
+      onLogin(data.user, data.directorInfo, data.teacherInfo)
     } catch (err) {
       setError('Server bilan bog\'lanishda xatolik')
       setIsLoading(false)

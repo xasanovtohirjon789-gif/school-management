@@ -26,12 +26,12 @@ export function AboutSection() {
             </h2>
             <p className="text-lg text-muted-foreground">
               TestAI - bu zamonaviy ta\'lim texnologiyalari asosida yaratilgan platforma. 
-              Biz ta\'lim sifatini oshirish va o\'qituvchilarga yordam berish uchun sun&apos;iy intellekt 
+              Biz ta'lim sifatini oshirish va o'qituvchilarga yordam berish uchun sun'iy intellekt 
               imkoniyatlaridan foydalanamiz.
             </p>
             <p className="text-muted-foreground">
-              Platformamiz orqali siz har qanday fan bo&apos;yicha testlarni tez va oson yarata olasiz. 
-              AI yordamida avtomatik savol generatsiyasi, natijalarni tahlil qilish va boshqa ko&apos;p 
+              Platformamiz orqali siz har qanday fan bo'yicha testlarni tez va oson yarata olasiz. 
+              AI yordamida avtomatik savol generatsiyasi, natijalarni tahlil qilish va boshqa ko'p 
               imkoniyatlar sizni kutmoqda.
             </p>
 
@@ -77,7 +77,7 @@ export function AboutSection() {
                     </div>
                     <div className="bg-muted rounded-xl p-4">
                       <div className="text-2xl font-bold text-foreground">89%</div>
-                      <div className="text-xs text-muted-foreground">O&apos;rtacha ball</div>
+                      <div className="text-xs text-muted-foreground">O'rtacha ball</div>
                     </div>
                   </div>
 

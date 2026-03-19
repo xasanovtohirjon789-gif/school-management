@@ -454,7 +454,7 @@ export function TestsList() {
           </DialogHeader>
           <div className="py-4">
             <p className="text-muted-foreground">
-              Haqiqatan ham bu testni o&apos;chirmoqchimisiz? Bu amalni qaytarib bo&apos;lmaydi.
+              Haqiqatan ham bu testni o'chirmoqchimisiz? Bu amalni qaytarib bo'lmaydi.
             </p>
           </div>
           <DialogFooter className="gap-2">

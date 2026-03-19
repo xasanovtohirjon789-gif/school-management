@@ -39,7 +39,7 @@ export function Footer() {
 
           {/* Support */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-foreground">Qo&apos;llab-quvvatlash</h3>
+            <h3 className="text-sm font-semibold text-foreground">Qo'llab-quvvatlash</h3>
             <nav className="flex flex-col gap-2">
               <Link href="#" className="text-sm text-muted-foreground hover:text-primary transition-colors">
                 Yordam markazi

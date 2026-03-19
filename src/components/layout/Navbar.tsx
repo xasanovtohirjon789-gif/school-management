@@ -62,7 +62,7 @@ export function Navbar() {
           <Button size="sm" asChild>
             <Link href="/?auth=register" className="flex items-center gap-2">
               <UserPlus className="h-4 w-4" />
-              Ro&apos;yxatdan o&apos;tish
+              Ro'yxatdan o'tish
             </Link>
           </Button>
         </div>
@@ -112,7 +112,7 @@ export function Navbar() {
                   <Button size="lg" asChild className="w-full">
                     <Link href="/?auth=register" onClick={() => setIsOpen(false)}>
                       <UserPlus className="h-4 w-4 mr-2" />
-                      Ro&apos;yxatdan o&apos;tish
+                      Ro'yxatdan o'tish
                     </Link>
                   </Button>
                 </div>

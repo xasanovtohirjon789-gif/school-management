@@ -28,8 +28,8 @@ export function HeroSection() {
 
           {/* Description */}
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl">
-            Sun&apos;iy intellekt yordamida testlarni tez va oson yarating. 
-            Bilimlaringizni sinang, natijalarni tahlil qiling va o&apos;z ustingizda ishlang.
+            Sun'iy intellekt yordamida testlarni tez va oson yarating. 
+            Bilimlaringizni sinang, natijalarni tahlil qiling va o'z ustingizda ishlang.
           </p>
 
           {/* CTA Buttons */}

@@ -36,7 +36,7 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
           Tizimga kirish
         </CardTitle>
         <CardDescription className="text-muted-foreground">
-          Hisobingizga kirish uchun ma&apos;lumotlaringizni kiriting
+          Hisobingizga kirish uchun ma'lumotlaringizni kiriting
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -119,12 +119,12 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
 
         {/* Register Link */}
         <div className="text-center text-sm text-muted-foreground">
-          Hisobingiz yo&apos;qmi?{' '}
+          Hisobingiz yo'qmi?{' '}
           <button
             onClick={onSwitchToRegister}
             className="text-primary font-medium hover:underline"
           >
-            Ro&apos;yxatdan o&apos;ting
+            Ro'yxatdan o'ting
           </button>
         </div>
       </CardContent>

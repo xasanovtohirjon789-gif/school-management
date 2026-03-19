@@ -3,9 +3,10 @@ import ZAI from 'z-ai-web-dev-sdk'
 
 export async function POST(request: NextRequest) {
   try {
-    const { topic, count = 5 } = await request.json()
+    const body = await request.json()
+    const { topic, count = 5 } = body
 
-    if (!topic) {
+    if (!topic || typeof topic !== 'string' || topic.trim().length === 0) {
       return NextResponse.json(
         { error: 'Mavzu kiritilmagan' },
         { status: 400 }
@@ -13,74 +14,55 @@ export async function POST(request: NextRequest) {
     }
 
     // Limit count to reasonable range
-    const questionCount = Math.min(Math.max(count, 1), 50)
+    const questionCount = Math.min(Math.max(Number(count) || 5, 1), 50)
+    const sanitizedTopic = topic.trim().slice(0, 200)
 
     const zai = await ZAI.create()
 
-    const prompt = `Siz professional ta'lim test yaratuvchisisiz. "${topic}" mavzusida ${questionCount} ta test savoli yarating.
+    const systemPrompt = `Siz professional ta'lim sohasida test savollari yaratuvchi mutaxassissiz. Sizning vazifangiz - berilgan mavzu bo'yicha sifatli, tushunarli va ta'limiy qiymatga ega bo'lgan test savollarini yaratish.
 
-Har bir savol uchun quyidagi JSON formatida javob bering:
+JAVOB FORMATI:
+Faqat va faqat JSON massiv qaytaring. Boshqa hech qanday matn, tushuntirish yoki izoh YO'Q!
+
+Har bir savol quyidagi formatda bo'lishi shart:
 {
-  "question": "Savol matni",
-  "options": ["A javob", "B javob", "C javob", "D javob"],
+  "question": "Savol matni (ochiq va tushunarli)",
+  "options": ["_variant_1_", "_variant_2_", "_variant_3_", "_variant_4_"],
   "correct": 0
 }
 
-Muhim qoidalar:
-- Savollar ${topic} mavzusida bo'lsin va bir-biridan farq qilsin
-- Har bir savol 4 ta javob variantiga ega bo'lsin
-- correct maydoni to'g'ri javob indeksini ko'rsatsin (0-3)
-- Faqat JSON massiv qaytaring, boshqa matn kerak emas
-- O'zbek tilida yozing
-- Savollar turli xil bo'lsin: ta'rif, misol, tahlil, solishtirish turlarida
-- To'g'ri javoblar turli variantlarda bo'lsin (hammasi A yoki B bo'lmasin)
+correct maydoni to'g'ri javobning indeksini bildiradi (0, 1, 2 yoki 3).`
 
-${questionCount} ta savol yarating. Faqat JSON massiv qaytaring!`
+    const userPrompt = `Mavzu: "${sanitizedTopic}"
+
+Shu mavzu bo'yicha ${questionCount} ta test savoli yarating.
+
+TALABLAR:
+1. Har bir savol aniq va tushunarli bo'lsin
+2. 4 ta javob varianti bo'lsin (faqat bittasi to'g'ri)
+3. To'g'ri javoblar turli variantlarda tarqalgan bo'lsin
+4. Savollar turli darajada: oson, o'rta, qiyin
+5. O'zbek tilida yozing
+6. Savollar mavzuga aloqador bo'lsin
+
+Javobni faqat JSON massiv ko'rinishida bering!`
 
     const completion = await zai.chat.completions.create({
       messages: [
-        {
-          role: 'system',
-          content: `Siz professional ta'lim test yaratuvchisisiz. Faqat toza JSON formatida javob bering. Hech qanday tushuntirish yoki matn qo'shmang.`
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
       ],
-      temperature: 0.8,
+      temperature: 0.7,
+      max_tokens: 4000,
     })
 
     const content = completion.choices[0]?.message?.content || ''
 
-    // Parse JSON from response
-    let questions
-    try {
-      // Try to extract JSON array from response
-      const jsonMatch = content.match(/\[[\s\S]*\]/)
-      if (jsonMatch) {
-        questions = JSON.parse(jsonMatch[0])
-      } else {
-        throw new Error('No JSON array found')
-      }
-    } catch (parseError) {
-      console.error('JSON parse error:', parseError)
-      // If parsing fails, generate demo questions
-      questions = generateDemoQuestions(topic, questionCount)
-    }
+    // Parse JSON from response with multiple fallback strategies
+    let questions = parseQuestionsFromResponse(content, sanitizedTopic, questionCount)
 
-    // Validate questions
-    if (!Array.isArray(questions) || questions.length === 0) {
-      questions = generateDemoQuestions(topic, questionCount)
-    }
-
-    // Ensure we have the requested number of questions
-    if (questions.length < questionCount) {
-      const additionalQuestions = generateDemoQuestions(topic, questionCount - questions.length)
-      questions = [...questions, ...additionalQuestions]
-    } else if (questions.length > questionCount) {
-      questions = questions.slice(0, questionCount)
-    }
+    // Validate and clean questions
+    questions = validateAndCleanQuestions(questions, sanitizedTopic, questionCount)
 
     return NextResponse.json({ 
       questions,
@@ -110,6 +92,68 @@ ${questionCount} ta savol yarating. Faqat JSON massiv qaytaring!`
       })
     }
   }
+}
+
+function parseQuestionsFromResponse(content: string, topic: string, count: number) {
+  // Strategy 1: Try direct JSON parse
+  try {
+    const parsed = JSON.parse(content)
+    if (Array.isArray(parsed)) return parsed
+  } catch {}
+
+  // Strategy 2: Extract JSON array from text
+  try {
+    const jsonMatch = content.match(/\[[\s\S]*?\](?=\s*$|\s*[^,\]\s])/)
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0])
+      if (Array.isArray(parsed)) return parsed
+    }
+  } catch {}
+
+  // Strategy 3: Find all JSON objects and create array
+  try {
+    const objectMatches = content.match(/\{[^{}]*"question"[^{}]*\}/g)
+    if (objectMatches && objectMatches.length > 0) {
+      const questions = objectMatches.map(obj => {
+        try {
+          return JSON.parse(obj)
+        } catch {
+          return null
+        }
+      }).filter(q => q !== null)
+      if (questions.length > 0) return questions
+    }
+  } catch {}
+
+  // Fallback to demo questions
+  return generateDemoQuestions(topic, count)
+}
+
+function validateAndCleanQuestions(questions: any[], topic: string, count: number) {
+  if (!Array.isArray(questions) || questions.length === 0) {
+    return generateDemoQuestions(topic, count)
+  }
+
+  // Clean and validate each question
+  const cleanedQuestions = questions
+    .filter(q => q && typeof q === 'object')
+    .map(q => ({
+      question: String(q.question || '').trim(),
+      options: Array.isArray(q.options) 
+        ? q.options.map((o: any) => String(o || '').trim()).slice(0, 4)
+        : ['Variant A', 'Variant B', 'Variant C', 'Variant D'],
+      correct: typeof q.correct === 'number' ? Math.min(Math.max(q.correct, 0), 3) : 0
+    }))
+    .filter(q => q.question.length > 0 && q.options.length >= 2)
+
+  // If not enough valid questions, add demo questions
+  if (cleanedQuestions.length < count) {
+    const additionalNeeded = count - cleanedQuestions.length
+    const additionalQuestions = generateDemoQuestions(topic, additionalNeeded)
+    return [...cleanedQuestions, ...additionalQuestions].slice(0, count)
+  }
+
+  return cleanedQuestions.slice(0, count)
 }
 
 function generateDemoQuestions(topic: string, count: number) {

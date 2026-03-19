@@ -42,7 +42,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
     <Card className="w-full max-w-md mx-auto bg-card border-border shadow-lg shadow-primary/5">
       <CardHeader className="space-y-1 text-center pb-4">
         <CardTitle className="text-2xl font-bold text-foreground">
-          Ro&apos;yxatdan o&apos;tish
+          Ro'yxatdan o'tish
         </CardTitle>
         <CardDescription className="text-muted-foreground">
           Yangi hisob yarating va boshlang
@@ -161,10 +161,10 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Ro&apos;yxatdan o&apos;tilmoqda...
+                Ro'yxatdan o'tilmoqda...
               </>
             ) : (
-              'Ro&apos;yxatdan o&apos;tish'
+              'Ro\'yxatdan o\'tish'
             )}
           </Button>
         </form>

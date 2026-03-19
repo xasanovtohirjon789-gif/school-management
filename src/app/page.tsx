@@ -14,19 +14,16 @@ export default function SchoolManagementPage() {
 
   useEffect(() => {
     setHydrated(true)
-    // Load user from localStorage
     try {
-      const stored = localStorage.getItem('school-auth-storage')
+      const stored = localStorage.getItem('school-auth')
       if (stored) {
-        const parsed = JSON.parse(stored)
-        if (parsed.state?.isAuthenticated && parsed.state?.user) {
-          setUser(parsed.state.user)
-          setDirectorInfo(parsed.state.directorInfo)
-          setTeacherInfo(parsed.state.teacherInfo)
-        }
+        const data = JSON.parse(stored)
+        setUser(data.user)
+        setDirectorInfo(data.directorInfo)
+        setTeacherInfo(data.teacherInfo)
       }
     } catch (e) {
-      console.error('Failed to load auth state:', e)
+      console.error('Load error:', e)
     }
   }, [])
 
@@ -34,34 +31,20 @@ export default function SchoolManagementPage() {
     setUser(userData)
     setDirectorInfo(dirInfo || null)
     setTeacherInfo(teachInfo || null)
-    
-    // Save to localStorage
-    try {
-      localStorage.setItem('school-auth-storage', JSON.stringify({
-        state: {
-          user: userData,
-          directorInfo: dirInfo || null,
-          teacherInfo: teachInfo || null,
-          isAuthenticated: true
-        }
-      }))
-    } catch (e) {
-      console.error('Failed to save auth state:', e)
-    }
+    localStorage.setItem('school-auth', JSON.stringify({
+      user: userData,
+      directorInfo: dirInfo || null,
+      teacherInfo: teachInfo || null
+    }))
   }
 
   const handleLogout = () => {
     setUser(null)
     setDirectorInfo(null)
     setTeacherInfo(null)
-    try {
-      localStorage.removeItem('school-auth-storage')
-    } catch (e) {
-      console.error('Failed to clear auth state:', e)
-    }
+    localStorage.removeItem('school-auth')
   }
 
-  // Show loading until hydrated
   if (!hydrated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -73,12 +56,10 @@ export default function SchoolManagementPage() {
     )
   }
 
-  // Not authenticated - show login
   if (!user) {
     return <LoginForm onLogin={handleLogin} />
   }
 
-  // Show appropriate panel based on role
   switch (user.role) {
     case 'admin':
       return <AdminPanel user={user} onLogout={handleLogout} />

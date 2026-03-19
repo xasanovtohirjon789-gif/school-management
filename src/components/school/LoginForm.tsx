@@ -6,6 +6,37 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { GraduationCap, Eye, EyeOff, AlertCircle } from 'lucide-react'
 
+// Initialize storage with default admin
+const initStorage = () => {
+  if (typeof window === 'undefined') return
+  
+  const users = localStorage.getItem('school-users')
+  if (!users) {
+    localStorage.setItem('school-users', JSON.stringify([
+      { id: 'admin', login: 'ToHa_012', password: 'tox1c___', name: 'Bosh Admin', role: 'admin' }
+    ]))
+  }
+  
+  if (!localStorage.getItem('school-schools')) {
+    localStorage.setItem('school-schools', JSON.stringify([]))
+  }
+  if (!localStorage.getItem('school-directors')) {
+    localStorage.setItem('school-directors', JSON.stringify([]))
+  }
+  if (!localStorage.getItem('school-teachers')) {
+    localStorage.setItem('school-teachers', JSON.stringify([]))
+  }
+  if (!localStorage.getItem('school-classes')) {
+    localStorage.setItem('school-classes', JSON.stringify([]))
+  }
+  if (!localStorage.getItem('school-students')) {
+    localStorage.setItem('school-students', JSON.stringify([]))
+  }
+  if (!localStorage.getItem('school-coins')) {
+    localStorage.setItem('school-coins', JSON.stringify([]))
+  }
+}
+
 interface LoginFormProps {
   onLogin: (user: any, directorInfo?: any, teacherInfo?: any) => void
 }
@@ -21,27 +52,60 @@ export function LoginForm({ onLogin }: LoginFormProps) {
     e.preventDefault()
     setError('')
     setIsLoading(true)
-
+    
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ login: loginValue, password }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.error || 'Xatolik yuz berdi')
+      initStorage()
+      
+      const usersData = localStorage.getItem('school-users')
+      const users = usersData ? JSON.parse(usersData) : []
+      
+      const foundUser = users.find((u: any) => u.login === loginValue && u.password === password)
+      
+      if (!foundUser) {
+        setError('Login yoki parol noto\'g\'ri')
         setIsLoading(false)
         return
       }
-
-      onLogin(data.user, data.directorInfo, data.teacherInfo)
+      
+      let directorInfo = null
+      let teacherInfo = null
+      
+      if (foundUser.role === 'director') {
+        const directors = JSON.parse(localStorage.getItem('school-directors') || '[]')
+        const schools = JSON.parse(localStorage.getItem('school-schools') || '[]')
+        const director = directors.find((d: any) => d.userId === foundUser.id)
+        if (director) {
+          const school = schools.find((s: any) => s.id === director.schoolId)
+          directorInfo = { schoolId: director.schoolId, schoolName: school?.name || '' }
+        }
+      }
+      
+      if (foundUser.role === 'teacher') {
+        const teachers = JSON.parse(localStorage.getItem('school-teachers') || '[]')
+        const classes = JSON.parse(localStorage.getItem('school-classes') || '[]')
+        const teacher = teachers.find((t: any) => t.userId === foundUser.id)
+        if (teacher) {
+          const teacherClasses = classes.filter((c: any) => 
+            c.teacherIds && c.teacherIds.includes(teacher.id)
+          )
+          teacherInfo = {
+            subject: teacher.subject,
+            classes: teacherClasses.map((c: any) => ({ id: c.id, name: c.name }))
+          }
+        }
+      }
+      
+      onLogin({
+        id: foundUser.id,
+        login: foundUser.login,
+        name: foundUser.name,
+        role: foundUser.role
+      }, directorInfo, teacherInfo)
+      
     } catch (err) {
-      setError('Server bilan bog\'lanishda xatolik')
-      setIsLoading(false)
+      setError('Xatolik yuz berdi')
     }
+    setIsLoading(false)
   }
 
   return (

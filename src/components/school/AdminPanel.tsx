@@ -12,9 +12,7 @@ import {
   School, 
   UserCog,
   AlertCircle,
-  CheckCircle,
-  ChevronDown,
-  ChevronRight
+  CheckCircle
 } from 'lucide-react'
 
 interface AdminPanelProps {
@@ -22,26 +20,10 @@ interface AdminPanelProps {
   onLogout: () => void
 }
 
-interface Director {
-  id: string
-  userId: string
-  schoolId: string
-  user: { id: string; login: string; name: string }
-  school: { id: string; name: string }
-  _count?: { teachers: number }
-}
-
-interface SchoolData {
-  id: string
-  name: string
-  address?: string | null
-  _count?: { classes: number; directors: number }
-}
-
 export function AdminPanel({ user, onLogout }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<'directors' | 'schools'>('schools')
-  const [directors, setDirectors] = useState<Director[]>([])
-  const [schools, setSchools] = useState<SchoolData[]>([])
+  const [schools, setSchools] = useState<any[]>([])
+  const [directors, setDirectors] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -52,107 +34,118 @@ export function AdminPanel({ user, onLogout }: AdminPanelProps) {
   const [newDirectorLogin, setNewDirectorLogin] = useState('')
   const [newDirectorPassword, setNewDirectorPassword] = useState('')
   const [newDirectorName, setNewDirectorName] = useState('')
-  const [expandedSchools, setExpandedSchools] = useState<string[]>([])
 
-  const fetchData = async () => {
+  const loadData = () => {
     try {
-      const [schoolsRes, directorsRes] = await Promise.all([
-        fetch('/api/schools'),
-        fetch('/api/directors')
-      ])
-      const schoolsData = await schoolsRes.json()
-      const directorsData = await directorsRes.json()
-      setSchools(schoolsData)
-      setDirectors(directorsData)
-      if (schoolsData.length > 0 && !selectedSchoolId) {
-        setSelectedSchoolId(schoolsData[0].id)
+      const schoolsData = localStorage.getItem('school-schools')
+      const directorsData = localStorage.getItem('school-directors')
+      const usersData = localStorage.getItem('school-users')
+      
+      const schoolsList = schoolsData ? JSON.parse(schoolsData) : []
+      const directorsList = directorsData ? JSON.parse(directorsData) : []
+      const usersList = usersData ? JSON.parse(usersData) : []
+      
+      // Merge director with user and school info
+      const directorsWithInfo = directorsList.map((d: any) => {
+        const directorUser = usersList.find((u: any) => u.id === d.userId)
+        const school = schoolsList.find((s: any) => s.id === d.schoolId)
+        const teachers = JSON.parse(localStorage.getItem('school-teachers') || '[]')
+        const teacherCount = teachers.filter((t: any) => t.directorId === d.id).length
+        return {
+          ...d,
+          user: directorUser,
+          school: school,
+          _count: { teachers: teacherCount }
+        }
+      })
+      
+      // Add counts to schools
+      const schoolsWithCounts = schoolsList.map((s: any) => {
+        const classes = JSON.parse(localStorage.getItem('school-classes') || '[]')
+        const classCount = classes.filter((c: any) => c.schoolId === s.id).length
+        const directorCount = directorsList.filter((d: any) => d.schoolId === s.id).length
+        return { ...s, _count: { classes: classCount, directors: directorCount } }
+      })
+      
+      setSchools(schoolsWithCounts)
+      setDirectors(directorsWithInfo)
+      
+      if (schoolsList.length > 0 && !selectedSchoolId) {
+        setSelectedSchoolId(schoolsList[0].id)
       }
-    } catch (err) {
-      console.error('Fetch error:', err)
+    } catch (e) {
+      console.error('Load error:', e)
     }
   }
 
   useEffect(() => {
-    fetchData()
+    loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleCreateSchool = async () => {
+  const handleCreateSchool = () => {
     if (!newSchoolName.trim()) {
       setError('Maktab nomini kiriting')
       return
     }
-    setIsLoading(true)
-    setError('')
     
-    try {
-      const response = await fetch('/api/schools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newSchoolName, address: newSchoolAddress || undefined }),
-      })
-      
-      if (!response.ok) {
-        const data = await response.json()
-        setError(data.error || 'Xatolik yuz berdi')
-        setIsLoading(false)
-        return
-      }
-      
-      setSuccess('Maktab muvaffaqiyatli yaratildi')
-      setNewSchoolName('')
-      setNewSchoolAddress('')
-      fetchData()
-    } catch (err) {
-      setError('Server xatosi')
+    const schoolsList = JSON.parse(localStorage.getItem('school-schools') || '[]')
+    const newSchool = {
+      id: 'school_' + Date.now(),
+      name: newSchoolName,
+      address: newSchoolAddress || null,
+      createdAt: new Date().toISOString()
     }
-    setIsLoading(false)
+    
+    schoolsList.push(newSchool)
+    localStorage.setItem('school-schools', JSON.stringify(schoolsList))
+    
+    setSuccess('Maktab muvaffaqiyatli yaratildi')
+    setNewSchoolName('')
+    setNewSchoolAddress('')
+    loadData()
   }
 
-  const handleCreateDirector = async () => {
+  const handleCreateDirector = () => {
     if (!newDirectorLogin.trim() || !newDirectorPassword.trim() || !newDirectorName.trim() || !selectedSchoolId) {
       setError('Barcha maydonlarni to\'ldiring')
       return
     }
-    setIsLoading(true)
-    setError('')
     
-    try {
-      const response = await fetch('/api/directors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          login: newDirectorLogin,
-          password: newDirectorPassword,
-          name: newDirectorName,
-          schoolId: selectedSchoolId,
-        }),
-      })
-      
-      if (!response.ok) {
-        const data = await response.json()
-        setError(data.error || 'Xatolik yuz berdi')
-        setIsLoading(false)
-        return
-      }
-      
-      setSuccess('Direktor muvaffaqiyatli yaratildi')
-      setNewDirectorLogin('')
-      setNewDirectorPassword('')
-      setNewDirectorName('')
-      fetchData()
-    } catch (err) {
-      setError('Server xatosi')
+    const usersList = JSON.parse(localStorage.getItem('school-users') || '[]')
+    
+    if (usersList.find((u: any) => u.login === newDirectorLogin)) {
+      setError('Bunday login allaqachon mavjud')
+      return
     }
-    setIsLoading(false)
-  }
-
-  const toggleSchoolExpand = (schoolId: string) => {
-    setExpandedSchools(prev => 
-      prev.includes(schoolId) 
-        ? prev.filter(id => id !== schoolId)
-        : [...prev, schoolId]
-    )
+    
+    const newUserId = 'user_' + Date.now()
+    const directorId = 'director_' + Date.now()
+    
+    // Create user
+    usersList.push({
+      id: newUserId,
+      login: newDirectorLogin,
+      password: newDirectorPassword,
+      name: newDirectorName,
+      role: 'director'
+    })
+    localStorage.setItem('school-users', JSON.stringify(usersList))
+    
+    // Create director
+    const directorsList = JSON.parse(localStorage.getItem('school-directors') || '[]')
+    directorsList.push({
+      id: directorId,
+      userId: newUserId,
+      schoolId: selectedSchoolId
+    })
+    localStorage.setItem('school-directors', JSON.stringify(directorsList))
+    
+    setSuccess('Direktor muvaffaqiyatli yaratildi')
+    setNewDirectorLogin('')
+    setNewDirectorPassword('')
+    setNewDirectorName('')
+    loadData()
   }
 
   return (
@@ -238,10 +231,9 @@ export function AdminPanel({ user, onLogout }: AdminPanelProps) {
                 />
                 <Button
                   onClick={handleCreateSchool}
-                  disabled={isLoading}
                   className="w-full bg-emerald-500 hover:bg-emerald-600"
                 >
-                  {isLoading ? 'Yaratilmoqda...' : 'Maktab Qo\'shish'}
+                  Maktab Qo&apos;shish
                 </Button>
               </CardContent>
             </Card>
@@ -262,11 +254,9 @@ export function AdminPanel({ user, onLogout }: AdminPanelProps) {
                     >
                       <div className="flex items-center justify-between">
                         <p className="font-medium text-white">{school.name}</p>
-                        <div className="flex gap-2">
-                          <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
-                            {school._count?.classes || 0} sinf
-                          </Badge>
-                        </div>
+                        <Badge variant="secondary" className="bg-blue-500/20 text-blue-300">
+                          {school._count?.classes || 0} sinf
+                        </Badge>
                       </div>
                       {school.address && (
                         <p className="text-sm text-gray-400 mt-1">{school.address}</p>
@@ -324,10 +314,9 @@ export function AdminPanel({ user, onLogout }: AdminPanelProps) {
                 />
                 <Button
                   onClick={handleCreateDirector}
-                  disabled={isLoading}
                   className="w-full bg-emerald-500 hover:bg-emerald-600"
                 >
-                  {isLoading ? 'Yaratilmoqda...' : 'Direktor Qo\'shish'}
+                  Direktor Qo&apos;shish
                 </Button>
               </CardContent>
             </Card>
@@ -347,9 +336,9 @@ export function AdminPanel({ user, onLogout }: AdminPanelProps) {
                       className="p-3 bg-white/5 rounded-lg border border-white/10 flex items-center justify-between"
                     >
                       <div>
-                        <p className="font-medium text-white">{director.user.name}</p>
-                        <p className="text-sm text-gray-400">Login: {director.user.login}</p>
-                        <p className="text-sm text-emerald-400">{director.school.name}</p>
+                        <p className="font-medium text-white">{director.user?.name}</p>
+                        <p className="text-sm text-gray-400">Login: {director.user?.login}</p>
+                        <p className="text-sm text-emerald-400">{director.school?.name}</p>
                       </div>
                       <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-300">
                         {director._count?.teachers || 0} o&apos;qituvchi

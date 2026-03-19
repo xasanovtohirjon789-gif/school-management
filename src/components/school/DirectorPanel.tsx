@@ -23,35 +23,11 @@ interface DirectorPanelProps {
   onLogout: () => void
 }
 
-interface Teacher {
-  id: string
-  userId: string
-  subject: string
-  user: { id: string; login: string; name: string }
-  classTeacher: { id: string; class: { id: string; name: string } }[]
-}
-
-interface ClassData {
-  id: string
-  name: string
-  schoolId: string
-  _count?: { students: number }
-}
-
-interface Student {
-  id: string
-  firstName: string
-  lastName: string
-  middleName?: string | null
-  coins: number
-  classId: string
-}
-
 export function DirectorPanel({ user, directorInfo, onLogout }: DirectorPanelProps) {
   const [activeTab, setActiveTab] = useState<'teachers' | 'classes' | 'students'>('classes')
-  const [teachers, setTeachers] = useState<Teacher[]>([])
-  const [classes, setClasses] = useState<ClassData[]>([])
-  const [students, setStudents] = useState<Student[]>([])
+  const [teachers, setTeachers] = useState<any[]>([])
+  const [classes, setClasses] = useState<any[]>([])
+  const [students, setStudents] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -68,187 +44,162 @@ export function DirectorPanel({ user, directorInfo, onLogout }: DirectorPanelPro
   const [directorId, setDirectorId] = useState('')
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Get director ID
-        const directorsRes = await fetch('/api/directors')
-        const directors = await directorsRes.json()
-        const director = directors.find((d: any) => d.userId === user?.id)
-        
-        if (director) {
-          setDirectorId(director.id)
-          
-          // Fetch teachers for this director
-          const teachersRes = await fetch(`/api/teachers?directorId=${director.id}`)
-          const teachersData = await teachersRes.json()
-          setTeachers(teachersData)
-        }
-        
-        // Fetch classes for this school
-        if (directorInfo?.schoolId) {
-          const classesRes = await fetch(`/api/classes?schoolId=${directorInfo.schoolId}`)
-          const classesData = await classesRes.json()
-          setClasses(classesData)
-          if (classesData.length > 0) {
-            setSelectedStudentClassId(classesData[0].id)
-          }
-        }
-      } catch (err) {
-        console.error('Fetch error:', err)
-      }
+    const directors = JSON.parse(localStorage.getItem('school-directors') || '[]')
+    const director = directors.find((d: any) => d.userId === user?.id)
+    if (director) {
+      setDirectorId(director.id)
     }
-    
-    fetchData()
+    loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, directorInfo])
 
-  const fetchStudents = async (classId: string) => {
+  const loadData = () => {
     try {
-      const response = await fetch(`/api/students?classId=${classId}`)
-      const data = await response.json()
-      setStudents(data)
-    } catch (err) {
-      console.error('Fetch students error:', err)
+      // Load classes for this school
+      const classesData = JSON.parse(localStorage.getItem('school-classes') || '[]')
+      const schoolClasses = classesData.filter((c: any) => c.schoolId === directorInfo?.schoolId)
+      
+      // Add student counts
+      const studentsData = JSON.parse(localStorage.getItem('school-students') || '[]')
+      const classesWithCounts = schoolClasses.map((c: any) => ({
+        ...c,
+        _count: { students: studentsData.filter((s: any) => s.classId === c.id).length }
+      }))
+      setClasses(classesWithCounts)
+      
+      if (classesWithCounts.length > 0 && !selectedStudentClassId) {
+        setSelectedStudentClassId(classesWithCounts[0].id)
+      }
+      
+      // Load teachers for this director
+      const teachersData = JSON.parse(localStorage.getItem('school-teachers') || '[]')
+      const usersData = JSON.parse(localStorage.getItem('school-users') || '[]')
+      const directorTeachers = teachersData.filter((t: any) => t.directorId === directorId)
+      
+      const teachersWithUsers = directorTeachers.map((t: any) => {
+        const teacherUser = usersData.find((u: any) => u.id === t.userId)
+        return { ...t, user: teacherUser }
+      })
+      setTeachers(teachersWithUsers)
+    } catch (e) {
+      console.error('Load error:', e)
+    }
+  }
+
+  const loadStudents = () => {
+    if (!selectedStudentClassId) return
+    try {
+      const studentsData = JSON.parse(localStorage.getItem('school-students') || '[]')
+      const classStudents = studentsData.filter((s: any) => s.classId === selectedStudentClassId)
+      setStudents(classStudents)
+    } catch (e) {
+      console.error('Load students error:', e)
     }
   }
 
   useEffect(() => {
-    if (selectedStudentClassId) {
-      fetchStudents(selectedStudentClassId)
-    }
+    loadStudents()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedStudentClassId])
 
-  const handleCreateClass = async () => {
+  const handleCreateClass = () => {
     if (!newClassName.trim()) {
       setError('Sinf nomini kiriting')
       return
     }
-    setIsLoading(true)
-    setError('')
     
-    try {
-      const response = await fetch('/api/classes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newClassName,
-          schoolId: directorInfo?.schoolId,
-        }),
-      })
-      
-      if (!response.ok) {
-        const data = await response.json()
-        setError(data.error || 'Xatolik yuz berdi')
-        setIsLoading(false)
-        return
-      }
-      
-      setSuccess('Sinf muvaffaqiyatli qo\'shildi')
-      setNewClassName('')
-      // Refetch classes
-      const classesRes = await fetch(`/api/classes?schoolId=${directorInfo?.schoolId}`)
-      const classesData = await classesRes.json()
-      setClasses(classesData)
-    } catch (err) {
-      setError('Server xatosi')
+    const classesData = JSON.parse(localStorage.getItem('school-classes') || '[]')
+    const newClass = {
+      id: 'class_' + Date.now(),
+      name: newClassName,
+      schoolId: directorInfo?.schoolId,
+      teacherIds: []
     }
-    setIsLoading(false)
+    classesData.push(newClass)
+    localStorage.setItem('school-classes', JSON.stringify(classesData))
+    
+    setSuccess('Sinf muvaffaqiyatli yaratildi')
+    setNewClassName('')
+    loadData()
   }
 
-  const handleCreateTeacher = async () => {
+  const handleCreateTeacher = () => {
     if (!newTeacherLogin.trim() || !newTeacherPassword.trim() || !newTeacherName.trim() || !newTeacherSubject.trim()) {
       setError('Barcha maydonlarni to\'ldiring')
       return
     }
-    setIsLoading(true)
-    setError('')
     
-    try {
-      const response = await fetch('/api/teachers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          login: newTeacherLogin,
-          password: newTeacherPassword,
-          name: newTeacherName,
-          subject: newTeacherSubject,
-          directorId: directorId,
-        }),
-      })
-      
-      if (!response.ok) {
-        const data = await response.json()
-        setError(data.error || 'Xatolik yuz berdi')
-        setIsLoading(false)
-        return
-      }
-      
-      setSuccess('O\'qituvchi muvaffaqiyatli qo\'shildi')
-      setNewTeacherLogin('')
-      setNewTeacherPassword('')
-      setNewTeacherName('')
-      setNewTeacherSubject('')
-      // Refetch teachers
-      const teachersRes = await fetch(`/api/teachers?directorId=${directorId}`)
-      const teachersData = await teachersRes.json()
-      setTeachers(teachersData)
-    } catch (err) {
-      setError('Server xatosi')
+    const usersData = JSON.parse(localStorage.getItem('school-users') || '[]')
+    
+    if (usersData.find((u: any) => u.login === newTeacherLogin)) {
+      setError('Bunday login allaqachon mavjud')
+      return
     }
-    setIsLoading(false)
+    
+    const newUserId = 'user_' + Date.now()
+    const teacherId = 'teacher_' + Date.now()
+    
+    usersData.push({
+      id: newUserId,
+      login: newTeacherLogin,
+      password: newTeacherPassword,
+      name: newTeacherName,
+      role: 'teacher'
+    })
+    localStorage.setItem('school-users', JSON.stringify(usersData))
+    
+    const teachersData = JSON.parse(localStorage.getItem('school-teachers') || '[]')
+    teachersData.push({
+      id: teacherId,
+      userId: newUserId,
+      directorId: directorId,
+      subject: newTeacherSubject
+    })
+    localStorage.setItem('school-teachers', JSON.stringify(teachersData))
+    
+    setSuccess('O\'qituvchi muvaffaqiyatli qo\'shildi')
+    setNewTeacherLogin('')
+    setNewTeacherPassword('')
+    setNewTeacherName('')
+    setNewTeacherSubject('')
+    loadData()
   }
 
-  const handleCreateStudent = async () => {
+  const handleCreateStudent = () => {
     if (!newStudentFirstName.trim() || !newStudentLastName.trim() || !selectedStudentClassId) {
       setError('Ism, familiya va sinfni kiriting')
       return
     }
-    setIsLoading(true)
-    setError('')
     
-    try {
-      const response = await fetch('/api/students', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName: newStudentFirstName,
-          lastName: newStudentLastName,
-          middleName: newStudentMiddleName || undefined,
-          classId: selectedStudentClassId,
-        }),
-      })
-      
-      if (!response.ok) {
-        const data = await response.json()
-        setError(data.error || 'Xatolik yuz berdi')
-        setIsLoading(false)
-        return
-      }
-      
-      setSuccess('O\'quvchi muvaffaqiyatli qo\'shildi')
-      setNewStudentFirstName('')
-      setNewStudentLastName('')
-      setNewStudentMiddleName('')
-      fetchStudents(selectedStudentClassId)
-    } catch (err) {
-      setError('Server xatosi')
-    }
-    setIsLoading(false)
+    const studentsData = JSON.parse(localStorage.getItem('school-students') || '[]')
+    studentsData.push({
+      id: 'student_' + Date.now(),
+      firstName: newStudentFirstName,
+      lastName: newStudentLastName,
+      middleName: newStudentMiddleName || null,
+      classId: selectedStudentClassId,
+      coins: 0
+    })
+    localStorage.setItem('school-students', JSON.stringify(studentsData))
+    
+    setSuccess('O\'quvchi muvaffaqiyatli qo\'shildi')
+    setNewStudentFirstName('')
+    setNewStudentLastName('')
+    setNewStudentMiddleName('')
+    loadStudents()
+    loadData()
   }
 
-  const handleDeleteStudent = async (studentId: string) => {
+  const handleDeleteStudent = (studentId: string) => {
     if (!confirm('O\'quvchini o\'chirishga ishonchingiz komilmi?')) return
     
-    try {
-      await fetch('/api/students', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: studentId }),
-      })
-      setSuccess('O\'quvchi o\'chirildi')
-      fetchStudents(selectedStudentClassId)
-    } catch (err) {
-      setError('O\'chirishda xatolik')
-    }
+    const studentsData = JSON.parse(localStorage.getItem('school-students') || '[]')
+    const filtered = studentsData.filter((s: any) => s.id !== studentId)
+    localStorage.setItem('school-students', JSON.stringify(filtered))
+    
+    setSuccess('O\'quvchi o\'chirildi')
+    loadStudents()
+    loadData()
   }
 
   return (
@@ -336,10 +287,9 @@ export function DirectorPanel({ user, directorInfo, onLogout }: DirectorPanelPro
                 />
                 <Button
                   onClick={handleCreateClass}
-                  disabled={isLoading}
                   className="w-full bg-emerald-500 hover:bg-emerald-600"
                 >
-                  {isLoading ? 'Qo\'shilmoqda...' : 'Sinf Qo\'shish'}
+                  Sinf Qo&apos;shish
                 </Button>
               </CardContent>
             </Card>
@@ -409,10 +359,9 @@ export function DirectorPanel({ user, directorInfo, onLogout }: DirectorPanelPro
                 />
                 <Button
                   onClick={handleCreateTeacher}
-                  disabled={isLoading}
                   className="w-full bg-emerald-500 hover:bg-emerald-600"
                 >
-                  {isLoading ? 'Qo\'shilmoqda...' : 'O\'qituvchi Qo\'shish'}
+                  O&apos;qituvchi Qo&apos;shish
                 </Button>
               </CardContent>
             </Card>
@@ -431,9 +380,9 @@ export function DirectorPanel({ user, directorInfo, onLogout }: DirectorPanelPro
                       key={teacher.id}
                       className="p-3 bg-white/5 rounded-lg border border-white/10"
                     >
-                      <p className="font-medium text-white">{teacher.user.name}</p>
+                      <p className="font-medium text-white">{teacher.user?.name}</p>
                       <p className="text-sm text-emerald-400">{teacher.subject}</p>
-                      <p className="text-sm text-gray-400">Login: {teacher.user.login}</p>
+                      <p className="text-sm text-gray-400">Login: {teacher.user?.login}</p>
                     </div>
                   ))}
                   {teachers.length === 0 && (
@@ -487,10 +436,10 @@ export function DirectorPanel({ user, directorInfo, onLogout }: DirectorPanelPro
                 />
                 <Button
                   onClick={handleCreateStudent}
-                  disabled={isLoading || !selectedStudentClassId}
+                  disabled={!selectedStudentClassId}
                   className="w-full bg-emerald-500 hover:bg-emerald-600"
                 >
-                  {isLoading ? 'Qo\'shilmoqda...' : 'O\'quvchi Qo\'shish'}
+                  O&apos;quvchi Qo&apos;shish
                 </Button>
               </CardContent>
             </Card>

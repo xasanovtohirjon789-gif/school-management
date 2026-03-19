@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { 
@@ -23,130 +22,112 @@ interface TeacherPanelProps {
   onLogout: () => void
 }
 
-interface Student {
-  id: string
-  firstName: string
-  lastName: string
-  middleName?: string | null
-  coins: number
-  classId: string
-  class: { id: string; name: string }
-}
-
-interface ClassData {
-  id: string
-  name: string
-  schoolId: string
-  students: Student[]
-  classTeachers: { teacherId: string }[]
-}
-
-interface CoinTransaction {
-  id: string
-  amount: number
-  reason?: string | null
-  createdAt: string
-  student: {
-    firstName: string
-    lastName: string
-    middleName?: string | null
-  }
-}
-
 export function TeacherPanel({ user, teacherInfo, onLogout }: TeacherPanelProps) {
-  const [classes, setClasses] = useState<ClassData[]>([])
+  const [classes, setClasses] = useState<any[]>([])
   const [selectedClassId, setSelectedClassId] = useState('')
-  const [students, setStudents] = useState<Student[]>([])
+  const [students, setStudents] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [showHistory, setShowHistory] = useState(false)
-  const [transactions, setTransactions] = useState<CoinTransaction[]>([])
+  const [transactions, setTransactions] = useState<any[]>([])
   const [teacherId, setTeacherId] = useState('')
 
   useEffect(() => {
-    const fetchTeacherData = async () => {
-      try {
-        // Get teacher ID
-        const teachersRes = await fetch('/api/teachers')
-        const teachers = await teachersRes.json()
-        const teacher = teachers.find((t: any) => t.userId === user?.id)
+    try {
+      const teachers = JSON.parse(localStorage.getItem('school-teachers') || '[]')
+      const teacher = teachers.find((t: any) => t.userId === user?.id)
+      
+      if (teacher) {
+        setTeacherId(teacher.id)
         
-        if (teacher) {
-          setTeacherId(teacher.id)
-          
-          // Fetch classes for this teacher
-          const classesRes = await fetch(`/api/classes?teacherId=${teacher.id}`)
-          const classesData = await classesRes.json()
-          setClasses(classesData)
-          
-          if (classesData.length > 0) {
-            setSelectedClassId(classesData[0].id)
-            fetchStudents(classesData[0].id)
-          }
+        // Load classes for this teacher
+        const classesData = JSON.parse(localStorage.getItem('school-classes') || '[]')
+        const teacherClasses = classesData.filter((c: any) => 
+          c.teacherIds && c.teacherIds.includes(teacher.id)
+        )
+        
+        // Add student counts
+        const studentsData = JSON.parse(localStorage.getItem('school-students') || '[]')
+        const classesWithCounts = teacherClasses.map((c: any) => ({
+          ...c,
+          students: studentsData.filter((s: any) => s.classId === c.id)
+        }))
+        
+        setClasses(classesWithCounts)
+        
+        if (classesWithCounts.length > 0) {
+          setSelectedClassId(classesWithCounts[0].id)
         }
-      } catch (err) {
-        console.error('Fetch error:', err)
       }
+    } catch (e) {
+      console.error('Load error:', e)
     }
-    
-    fetchTeacherData()
   }, [user])
 
-  const fetchStudents = async (classId: string) => {
+  useEffect(() => {
+    loadStudents()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClassId])
+
+  const loadStudents = () => {
+    if (!selectedClassId) return
     try {
-      const response = await fetch(`/api/students?classId=${classId}`)
-      const data = await response.json()
-      setStudents(data)
-    } catch (err) {
-      console.error('Fetch students error:', err)
+      const studentsData = JSON.parse(localStorage.getItem('school-students') || '[]')
+      const classStudents = studentsData.filter((s: any) => s.classId === selectedClassId)
+      setStudents(classStudents)
+    } catch (e) {
+      console.error('Load students error:', e)
     }
   }
 
-  const handleCoinChange = async (studentId: string, amount: number) => {
+  const handleCoinChange = (studentId: string, amount: number) => {
     setIsLoading(true)
     setError('')
     
     try {
-      const response = await fetch('/api/coins', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId,
+      // Update student coins
+      const studentsData = JSON.parse(localStorage.getItem('school-students') || '[]')
+      const studentIndex = studentsData.findIndex((s: any) => s.id === studentId)
+      
+      if (studentIndex >= 0) {
+        studentsData[studentIndex].coins = (studentsData[studentIndex].coins || 0) + amount
+        localStorage.setItem('school-students', JSON.stringify(studentsData))
+        
+        // Add transaction record
+        const coinsData = JSON.parse(localStorage.getItem('school-coins') || '[]')
+        const student = studentsData[studentIndex]
+        coinsData.push({
+          id: 'coin_' + Date.now(),
+          studentId: studentId,
           teacherId: teacherId,
-          amount,
+          amount: amount,
           reason: amount > 0 ? 'Mukofot' : 'Jazo',
-        }),
-      })
-      
-      if (!response.ok) {
-        const data = await response.json()
-        setError(data.error || 'Xatolik yuz berdi')
-        setIsLoading(false)
-        return
+          createdAt: new Date().toISOString(),
+          student: { firstName: student.firstName, lastName: student.lastName, middleName: student.middleName }
+        })
+        localStorage.setItem('school-coins', JSON.stringify(coinsData))
+        
+        // Update local state
+        setStudents(prev => prev.map(s => 
+          s.id === studentId ? { ...s, coins: s.coins + amount } : s
+        ))
+        
+        setSuccess(`${amount > 0 ? '+' : ''}${amount} coin muvaffaqiyatli qo'shildi`)
       }
-      
-      setStudents(prev => prev.map(s => 
-        s.id === studentId ? { ...s, coins: s.coins + amount } : s
-      ))
-      
-      setSuccess(`${amount > 0 ? '+' : ''}${amount} coin muvaffaqiyatli qo'shildi`)
-    } catch (err) {
-      setError('Server xatosi')
+    } catch (e) {
+      setError('Xatolik yuz berdi')
     }
     setIsLoading(false)
   }
 
-  const fetchTransactions = async () => {
+  const loadTransactions = () => {
     try {
-      const response = await fetch('/api/coins')
-      const allTransactions = await response.json()
-      const teacherTransactions = allTransactions.filter(
-        (t: any) => t.teacherId === teacherId
-      )
+      const coinsData = JSON.parse(localStorage.getItem('school-coins') || '[]')
+      const teacherTransactions = coinsData.filter((c: any) => c.teacherId === teacherId)
       setTransactions(teacherTransactions)
-    } catch (err) {
-      console.error('Fetch transactions error:', err)
+    } catch (e) {
+      console.error('Load transactions error:', e)
     }
   }
 
@@ -170,7 +151,7 @@ export function TeacherPanel({ user, teacherInfo, onLogout }: TeacherPanelProps)
               variant="outline"
               onClick={() => {
                 setShowHistory(!showHistory)
-                if (!showHistory) fetchTransactions()
+                if (!showHistory) loadTransactions()
               }}
               className="border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
             >
@@ -215,11 +196,11 @@ export function TeacherPanel({ user, teacherInfo, onLogout }: TeacherPanelProps)
             </CardHeader>
             <CardContent>
               <div className="space-y-2 max-h-60 overflow-y-auto">
-                {transactions.map(t => (
-                  <div key={t.id} className="flex items-center justify-between p-2 bg-white/5 rounded">
+                {transactions.map((t: any) => (
+                  <div key={t.id} className="flex items-center justify-between p-2 bg-white/5 rounded border border-white/10">
                     <div>
                       <span className="text-white">
-                        {t.student.lastName} {t.student.firstName}
+                        {t.student?.lastName} {t.student?.firstName}
                       </span>
                       <span className="text-gray-400 text-sm ml-2">
                         {new Date(t.createdAt).toLocaleDateString('uz-UZ')}
@@ -246,10 +227,7 @@ export function TeacherPanel({ user, teacherInfo, onLogout }: TeacherPanelProps)
                 <Button
                   key={cls.id}
                   variant={selectedClassId === cls.id ? 'default' : 'outline'}
-                  onClick={() => {
-                    setSelectedClassId(cls.id)
-                    fetchStudents(cls.id)
-                  }}
+                  onClick={() => setSelectedClassId(cls.id)}
                   className={selectedClassId === cls.id ? 'bg-emerald-500 hover:bg-emerald-600' : 'border-white/20 text-white'}
                 >
                   {cls.name}
@@ -312,7 +290,7 @@ export function TeacherPanel({ user, teacherInfo, onLogout }: TeacherPanelProps)
                         <td className="py-3 px-4 text-center">
                           <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 font-semibold">
                             <Coins className="w-4 h-4" />
-                            {student.coins}
+                            {student.coins || 0}
                           </span>
                         </td>
                         <td className="py-3 px-4">

@@ -1,165 +1,236 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
 
+export const maxDuration = 60 // 60 seconds timeout
+
 export async function POST(request: NextRequest) {
+  let topic = 'Test'
+  let questionCount = 5
+
   try {
     const body = await request.json()
-    const { topic, count = 5 } = body
-
-    if (!topic || typeof topic !== 'string' || topic.trim().length === 0) {
+    topic = body.topic || 'Test'
+    questionCount = Math.min(Math.max(Number(body.count) || 5, 1), 50)
+    
+    if (!body.topic || typeof body.topic !== 'string' || body.topic.trim().length === 0) {
       return NextResponse.json(
         { error: 'Mavzu kiritilmagan' },
         { status: 400 }
       )
     }
 
-    // Limit count to reasonable range
-    const questionCount = Math.min(Math.max(Number(count) || 5, 1), 50)
-    const sanitizedTopic = topic.trim().slice(0, 200)
+    topic = body.topic.trim()
+    
+    console.log(`[AI Generate] Topic: "${topic}", Count: ${questionCount}`)
 
+    // Initialize AI
     const zai = await ZAI.create()
+    console.log('[AI Generate] ZAI initialized')
 
-    const systemPrompt = `Siz professional ta'lim sohasida test savollari yaratuvchi mutaxassissiz. Sizning vazifangiz - berilgan mavzu bo'yicha sifatli, tushunarli va ta'limiy qiymatga ega bo'lgan test savollarini yaratish.
+    // Create prompt
+    const prompt = `${topic} mavzusida ${questionCount} ta sifatli test savoli yarating.
 
-JAVOB FORMATI:
-Faqat va faqat JSON massiv qaytaring. Boshqa hech qanday matn, tushuntirish yoki izoh YO'Q!
+MUHIM QOIDALAR:
+1. Har bir savol aniq ${topic} mavzusiga tegishli bo'lishi kerak
+2. Savollar bir-biridan farq qilishi kerak
+3. Har bir savol 4 ta javob variantiga ega bo'lsin
+4. Faqat bitta javob to'g'ri bo'lsin
+5. To'g'ri javoblar turli variantlarda bo'lsin (hammasi A emas)
+6. O'zbek tilida yozing
 
-Har bir savol quyidagi formatda bo'lishi shart:
-{
-  "question": "Savol matni (ochiq va tushunarli)",
-  "options": ["_variant_1_", "_variant_2_", "_variant_3_", "_variant_4_"],
-  "correct": 0
-}
+JAVOB FORMATI - faqat JSON massiv:
+[
+  {
+    "question": "Savol matni",
+    "options": ["A variant", "B variant", "C variant", "D variant"],
+    "correct": 0
+  }
+]
 
-correct maydoni to'g'ri javobning indeksini bildiradi (0, 1, 2 yoki 3).`
+Hoziroq ${topic} mavzusida ${questionCount} ta savol yarating. Faqat JSON qaytaring!`
 
-    const userPrompt = `Mavzu: "${sanitizedTopic}"
-
-Shu mavzu bo'yicha ${questionCount} ta test savoli yarating.
-
-TALABLAR:
-1. Har bir savol aniq va tushunarli bo'lsin
-2. 4 ta javob varianti bo'lsin (faqat bittasi to'g'ri)
-3. To'g'ri javoblar turli variantlarda tarqalgan bo'lsin
-4. Savollar turli darajada: oson, o'rta, qiyin
-5. O'zbek tilida yozing
-6. Savollar mavzuga aloqador bo'lsin
-
-Javobni faqat JSON massiv ko'rinishida bering!`
-
+    // Call AI
+    console.log('[AI Generate] Sending request to AI...')
+    const startTime = Date.now()
+    
     const completion = await zai.chat.completions.create({
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
+        {
+          role: 'system',
+          content: 'Siz professional test savollari yaratuvchisisiz. Faqat JSON formatida javob bering. Hech qanday tushuntirish yozmang.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
       ],
-      temperature: 0.7,
-      max_tokens: 4000,
+      temperature: 0.8,
+      max_tokens: 8000,
     })
 
+    const elapsed = Date.now() - startTime
+    console.log(`[AI Generate] AI responded in ${elapsed}ms`)
+
     const content = completion.choices[0]?.message?.content || ''
+    console.log('[AI Generate] Response length:', content.length)
+    console.log('[AI Generate] Response preview:', content.substring(0, 200))
 
-    // Parse JSON from response with multiple fallback strategies
-    let questions = parseQuestionsFromResponse(content, sanitizedTopic, questionCount)
-
-    // Validate and clean questions
-    questions = validateAndCleanQuestions(questions, sanitizedTopic, questionCount)
+    // Parse questions
+    const questions = parseAIResponse(content, topic, questionCount)
+    
+    // Check if we got real AI questions or demo fallback
+    const isDemo = questions.length > 0 && questions[0].question.includes(topic + ' nima')
+    
+    if (isDemo) {
+      console.log('[AI Generate] WARNING: Using demo questions!')
+    } else {
+      console.log('[AI Generate] Successfully parsed', questions.length, 'AI questions')
+    }
 
     return NextResponse.json({ 
       questions,
       generated: questions.length,
-      requested: questionCount 
+      requested: questionCount,
+      isDemo
     })
 
-  } catch (error) {
-    console.error('AI generation error:', error)
+  } catch (error: any) {
+    console.error('[AI Generate] Error:', error.message)
+    console.error('[AI Generate] Stack:', error.stack)
     
     // Return demo questions on error
-    try {
-      const body = await request.json()
-      const count = Math.min(Math.max(body.count || 5, 1), 50)
-      return NextResponse.json({ 
-        questions: generateDemoQuestions(body.topic || 'Test', count),
-        generated: count,
-        requested: count,
-        isDemo: true 
-      })
-    } catch {
-      return NextResponse.json({ 
-        questions: generateDemoQuestions('Test', 5),
-        generated: 5,
-        requested: 5,
-        isDemo: true 
-      })
-    }
+    const demoQuestions = generateDemoQuestions(topic, questionCount)
+    return NextResponse.json({ 
+      questions: demoQuestions,
+      generated: questionCount,
+      requested: questionCount,
+      isDemo: true,
+      error: error.message
+    })
   }
 }
 
-function parseQuestionsFromResponse(content: string, topic: string, count: number) {
-  // Strategy 1: Try direct JSON parse
+function parseAIResponse(content: string, topic: string, count: number) {
+  let questions: any[] = []
+
+  // Strategy 1: Direct JSON parse
   try {
     const parsed = JSON.parse(content)
-    if (Array.isArray(parsed)) return parsed
-  } catch {}
-
-  // Strategy 2: Extract JSON array from text
-  try {
-    const jsonMatch = content.match(/\[[\s\S]*?\](?=\s*$|\s*[^,\]\s])/)
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0])
-      if (Array.isArray(parsed)) return parsed
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      questions = parsed
+      console.log('[Parse] Strategy 1 success:', questions.length, 'questions')
     }
-  } catch {}
+  } catch (e) {
+    // Continue to next strategy
+  }
 
-  // Strategy 3: Find all JSON objects and create array
-  try {
-    const objectMatches = content.match(/\{[^{}]*"question"[^{}]*\}/g)
-    if (objectMatches && objectMatches.length > 0) {
-      const questions = objectMatches.map(obj => {
-        try {
-          return JSON.parse(obj)
-        } catch {
-          return null
+  // Strategy 2: Extract JSON array from markdown code block
+  if (questions.length === 0) {
+    try {
+      const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/)
+      if (codeBlockMatch) {
+        const parsed = JSON.parse(codeBlockMatch[1].trim())
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          questions = parsed
+          console.log('[Parse] Strategy 2 success:', questions.length, 'questions')
         }
-      }).filter(q => q !== null)
-      if (questions.length > 0) return questions
+      }
+    } catch (e) {
+      // Continue
     }
-  } catch {}
+  }
 
-  // Fallback to demo questions
-  return generateDemoQuestions(topic, count)
-}
+  // Strategy 3: Find JSON array pattern
+  if (questions.length === 0) {
+    try {
+      // Match the largest JSON array
+      const arrayMatch = content.match(/\[[\s\S]*?\](?=\s*$|\s*```)/)
+      if (arrayMatch) {
+        const parsed = JSON.parse(arrayMatch[0])
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          questions = parsed
+          console.log('[Parse] Strategy 3 success:', questions.length, 'questions')
+        }
+      }
+    } catch (e) {
+      // Continue
+    }
+  }
 
-function validateAndCleanQuestions(questions: any[], topic: string, count: number) {
-  if (!Array.isArray(questions) || questions.length === 0) {
+  // Strategy 4: Build array from individual question objects
+  if (questions.length === 0) {
+    try {
+      // Find all question objects
+      const questionPattern = /\{\s*"question"\s*:\s*"[^"]*"\s*,\s*"options"\s*:\s*\[[^\]]*\]\s*,\s*"correct"\s*:\s*\d+\s*\}/g
+      const matches = content.match(questionPattern)
+      if (matches && matches.length > 0) {
+        questions = matches.map(m => JSON.parse(m))
+        console.log('[Parse] Strategy 4 success:', questions.length, 'questions')
+      }
+    } catch (e) {
+      // Continue
+    }
+  }
+
+  // If still no questions, use demo
+  if (questions.length === 0) {
+    console.log('[Parse] All strategies failed, using demo questions')
     return generateDemoQuestions(topic, count)
   }
 
-  // Clean and validate each question
-  const cleanedQuestions = questions
-    .filter(q => q && typeof q === 'object')
-    .map(q => ({
-      question: String(q.question || '').trim(),
-      options: Array.isArray(q.options) 
-        ? q.options.map((o: any) => String(o || '').trim()).slice(0, 4)
-        : ['Variant A', 'Variant B', 'Variant C', 'Variant D'],
-      correct: typeof q.correct === 'number' ? Math.min(Math.max(q.correct, 0), 3) : 0
-    }))
-    .filter(q => q.question.length > 0 && q.options.length >= 2)
+  // Validate and clean questions
+  const cleaned = validateQuestions(questions, topic, count)
+  return cleaned
+}
 
-  // If not enough valid questions, add demo questions
-  if (cleanedQuestions.length < count) {
-    const additionalNeeded = count - cleanedQuestions.length
-    const additionalQuestions = generateDemoQuestions(topic, additionalNeeded)
-    return [...cleanedQuestions, ...additionalQuestions].slice(0, count)
+function validateQuestions(questions: any[], topic: string, requestedCount: number) {
+  const validQuestions = questions
+    .filter(q => q && typeof q === 'object')
+    .map(q => {
+      // Ensure question has text
+      const question = String(q.question || q.text || q.savol || '').trim()
+      
+      // Ensure options array
+      let options: string[]
+      if (Array.isArray(q.options)) {
+        options = q.options.map((o: any) => String(o || '').trim())
+      } else if (Array.isArray(q.variants)) {
+        options = q.variants.map((o: any) => String(o || '').trim())
+      } else {
+        options = []
+      }
+      
+      // Ensure at least 2 options, max 4
+      options = options.slice(0, 4)
+      while (options.length < 4) {
+        options.push(`Variant ${String.fromCharCode(65 + options.length)}`)
+      }
+      
+      // Ensure correct answer index
+      let correct = 0
+      if (typeof q.correct === 'number') {
+        correct = Math.min(Math.max(q.correct, 0), 3)
+      } else if (typeof q.answer === 'number') {
+        correct = Math.min(Math.max(q.answer, 0), 3)
+      }
+      
+      return { question, options, correct }
+    })
+    .filter(q => q.question.length > 10) // Filter out empty/short questions
+
+  // If not enough questions, supplement with demo
+  if (validQuestions.length < requestedCount) {
+    const demoQuestions = generateDemoQuestions(topic, requestedCount - validQuestions.length)
+    return [...validQuestions, ...demoQuestions].slice(0, requestedCount)
   }
 
-  return cleanedQuestions.slice(0, count)
+  return validQuestions.slice(0, requestedCount)
 }
 
 function generateDemoQuestions(topic: string, count: number) {
-  const questionTemplates = [
+  const templates = [
     {
-      template: `${topic} nima va u qanday maqsadda ishlatiladi?`,
+      question: `${topic} nima va u qanday maqsadda ishlatiladi?`,
       options: [
         'Bu zamonaviy texnologiya bo\'lib, amaliyotda keng qo\'llaniladi',
         'Bu faqat nazariy tushuncha hisoblanadi',
@@ -169,7 +240,7 @@ function generateDemoQuestions(topic: string, count: number) {
       correct: 0
     },
     {
-      template: `${topic} ning asosiy afzalliklari qanday?`,
+      question: `${topic} ning asosiy afzalliklari qanday?`,
       options: [
         'Tezkorlik va samaradorlik',
         'Faqat narx jihatidan arzonligi',
@@ -179,7 +250,7 @@ function generateDemoQuestions(topic: string, count: number) {
       correct: 0
     },
     {
-      template: `${topic} bilan ishlash uchun qanday ko\'nikmalar kerak?`,
+      question: `${topic} bilan ishlash uchun qanday ko\'nikmalar kerak?`,
       options: [
         'Maxsus bilim talab qilinmaydi',
         'Faqat nazariy bilimlar yetarli',
@@ -189,7 +260,7 @@ function generateDemoQuestions(topic: string, count: number) {
       correct: 2
     },
     {
-      template: `${topic} sohasida eng muhim omil qaysi?`,
+      question: `${topic} sohasida eng muhim omil qaysi?`,
       options: [
         'Faqat texnik jihozlar',
         'Inson resurslari va bilim',
@@ -199,7 +270,7 @@ function generateDemoQuestions(topic: string, count: number) {
       correct: 1
     },
     {
-      template: `${topic} ni o\'rganish uchun qaysi usul eng samarali?`,
+      question: `${topic} ni o\'rganish uchun qaysi usul eng samarali?`,
       options: [
         'Faqat kitoblar o\'qish',
         'Amaliy mashg\'ulotlar va nazariya',
@@ -207,169 +278,13 @@ function generateDemoQuestions(topic: string, count: number) {
         'O\'z-o\'zidan o\'rganish'
       ],
       correct: 1
-    },
-    {
-      template: `${topic} sohasidagi eng so\'nggi tendensiyalar qanday?`,
-      options: [
-        'Raqamlashtirish va avtomatlashtirish',
-        'An\'anaviy usullarga qaytish',
-        'Kichiklashtirish',
-        'Markazlashtirish'
-      ],
-      correct: 0
-    },
-    {
-      template: `${topic} da xatolarga yo\'l qo\'ymaslik uchun nima qilish kerak?`,
-      options: [
-        'Tez-tez tekshirib borish',
-        'Faqat nazariy bilimlarga suyanish',
-        'Boshqalarning tajribasidan foydalanmaslik',
-        'Jarayonlarni murakkablashtirish'
-      ],
-      correct: 0
-    },
-    {
-      template: `${topic} sohasida karyera qilish uchun nima talab qilinadi?`,
-      options: [
-        'Faqat oliy ma\'lumot',
-        'Doimiy o\'rganish va rivojlanish',
-        'Katta tajriba',
-        'Maxsus sertifikatlar'
-      ],
-      correct: 1
-    },
-    {
-      template: `${topic} ning kelajagi qanday bo\'lishi kutilmoqda?`,
-      options: [
-        'Pasayish tendensiyasi',
-        'Barqaror rivojlanish',
-        'Butunlay yo\'q bo\'lib ketish',
-        'O\'zgarishsiz qolish'
-      ],
-      correct: 1
-    },
-    {
-      template: `${topic} ni kundalik hayotda qanday qo\'llash mumkin?`,
-      options: [
-        'Faqat ish joyida',
-        'Turli sohalarda keng qo\'llash mumkin',
-        'Faqat maxsus holatlarda',
-        'Umuman qo\'llash mumkin emas'
-      ],
-      correct: 1
-    },
-    {
-      template: `${topic} bo\'yicha asosiy tushunchalar qaysi?`,
-      options: [
-        'Faqat amaliy ko\'nikmalar',
-        'Nazariy asoslar va tamoyillar',
-        'Faqat texnik ma\'lumotlar',
-        'Hech qanday tushuncha yo\'q'
-      ],
-      correct: 1
-    },
-    {
-      template: `${topic} sohasida innovatsiyalar qanday?`,
-      options: [
-        'Juda kam',
-        'Doimiy rivojlanishda',
-        'Faqat nazariyada',
-        'Mavjud emas'
-      ],
-      correct: 1
-    },
-    {
-      template: `${topic} ni o\'rganish qancha vaqt oladi?`,
-      options: [
-        'Bir necha kun',
-        'Doimiy o\'rganish jarayoni',
-        'Faqat bir oy',
-        'Hech qancha vaqt kerak emas'
-      ],
-      correct: 1
-    },
-    {
-      template: `${topic} bo\'yicha eng yaxshi manbalar qaysi?`,
-      options: [
-        'Kitoblar va amaliy mashg\'ulotlar',
-        'Faqat video darslar',
-        'Faqat ma\'ruzalar',
-        'Manbalar kerak emas'
-      ],
-      correct: 0
-    },
-    {
-      template: `${topic} da muvaffaqiyat kaliti nima?`,
-      options: [
-        'Amaliyot va doimiy o\'rganish',
-        'Faqat iste\'dod',
-        'Faqat ta\'lim',
-        'Omad'
-      ],
-      correct: 0
-    },
-    {
-      template: `${topic} bilan bog\'liq eng katta xato nima?`,
-      options: [
-        'Amaliyotsiz o\'rganish',
-        'Ko\'p o\'qish',
-        'Savol berish',
-        'Tajriba qilish'
-      ],
-      correct: 0
-    },
-    {
-      template: `${topic} sohasida ekspert bo\'lish uchun nima kerak?`,
-      options: [
-        'Ko\'p yillik tajriba',
-        'Faqat sertifikat',
-        'Faqat ta\'lim',
-        'Hech nima kerak emas'
-      ],
-      correct: 0
-    },
-    {
-      template: `${topic} ning kamchiliklari bormi?`,
-      options: [
-        'Ha, ammo kamchiliklarni bartaraf etish mumkin',
-        'Yo\'q, kamchiliklari yo\'q',
-        'Faqat narx kamchiliklari',
-        'Faqat vaqt kamchiliklari'
-      ],
-      correct: 0
-    },
-    {
-      template: `${topic} ni kimlar o\'rganishi kerak?`,
-      options: [
-        'Hamma qiziquvchan odamlar',
-        'Faqat mutaxassislar',
-        'Faqat talabalar',
-        'Faqat o\'qituvchilar'
-      ],
-      correct: 0
-    },
-    {
-      template: `${topic} bo\'yicha test topshirishga tayyormisiz?`,
-      options: [
-        'Ha, tayyor!',
-        'Yo\'q, hali tayyor emasman',
-        'Qisman tayyorman',
-        'Bilmayman'
-      ],
-      correct: 0
     }
   ]
 
-  // Generate questions by rotating through templates
-  const questions = []
+  const result = []
   for (let i = 0; i < count; i++) {
-    const template = questionTemplates[i % questionTemplates.length]
-    questions.push({
-      question: template.template,
-      options: template.options,
-      correct: template.correct
-    })
+    const t = templates[i % templates.length]
+    result.push({ ...t })
   }
-
-  return questions
+  return result
 }

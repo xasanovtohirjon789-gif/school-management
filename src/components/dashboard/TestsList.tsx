@@ -124,12 +124,12 @@ export function TestsList() {
 
   // Handle edit
   const handleEdit = (testId: string) => {
-    router.push(`/?view=create&editId=${testId}`)
+    router.push(`/testai?view=create&editId=${testId}`)
   }
 
   // Handle start test
   const handleStartTest = (testId: string) => {
-    router.push(`/?view=solve&testId=${testId}`)
+    router.push(`/testai?view=solve&testId=${testId}`)
   }
 
   // Stats
@@ -152,7 +152,7 @@ export function TestsList() {
             Barcha yaratilgan testlarni boshqaring
           </p>
         </div>
-        <Button className="gap-2" onClick={() => router.push('/?view=create')}>
+        <Button className="gap-2" onClick={() => router.push('/testai?view=create')}>
           <Plus className="h-4 w-4" />
           Yangi test
         </Button>
@@ -354,7 +354,7 @@ export function TestsList() {
               ? 'Qidiruv so\'rovi bo\'yicha test topilmadi' 
               : 'Birinchi testingizni yarating va boshlang'}
           </p>
-          <Button onClick={() => router.push('/?view=create')}>
+          <Button onClick={() => router.push('/testai?view=create')}>
             <Plus className="h-4 w-4 mr-2" />
             Test yaratish
           </Button>

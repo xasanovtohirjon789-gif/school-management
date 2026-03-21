@@ -72,7 +72,7 @@ export function DashboardContent() {
         </div>
         <div className="flex gap-2">
           <Button className="gap-2" asChild>
-            <a href="/?view=create">
+            <a href="/testai?view=create">
               <Plus className="h-4 w-4" />
               Test yaratish
             </a>
@@ -126,7 +126,7 @@ export function DashboardContent() {
                 <CardDescription>Hozirda ishlash mumkin bo'lgan testlar</CardDescription>
               </div>
               <Button variant="ghost" size="sm" className="gap-1" asChild>
-                <a href="/?view=tests">
+                <a href="/testai?view=tests">
                   Barchasi
                   <ArrowRight className="h-4 w-4" />
                 </a>
@@ -139,7 +139,7 @@ export function DashboardContent() {
                 <div
                   key={test.id}
                   className="p-4 rounded-xl bg-muted/50 hover:bg-muted transition-all cursor-pointer group"
-                  onClick={() => window.location.href = `/?view=solve&testId=${test.id}`}
+                  onClick={() => window.location.href = `/testai?view=solve&testId=${test.id}`}
                 >
                   <div className="flex items-start gap-3 mb-3">
                     <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
@@ -190,19 +190,19 @@ export function DashboardContent() {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
-              <a href="/?view=create">
+              <a href="/testai?view=create">
                 <Plus className="h-5 w-5 text-primary" />
                 <span>Yangi test</span>
               </a>
             </Button>
             <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
-              <a href="/?view=tests">
+              <a href="/testai?view=tests">
                 <FileText className="h-5 w-5 text-secondary" />
                 <span>Testlarim</span>
               </a>
             </Button>
             <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
-              <a href="/?view=profile">
+              <a href="/testai?view=profile">
                 <Award className="h-5 w-5 text-accent" />
                 <span>Natijalar</span>
               </a>

@@ -1,0 +1,8 @@
+export { HeroSection } from './HeroSection'
+export { ProjectsSection } from './ProjectsSection'
+export { ProjectCard } from './ProjectCard'
+export { SkillsSection } from './SkillsSection'
+export { ContactSection } from './ContactSection'
+export { ExperienceSection } from './ExperienceSection'
+export { PortfolioNav } from './PortfolioNav'
+export { PortfolioFooter } from './PortfolioFooter'

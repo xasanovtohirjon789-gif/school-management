@@ -1,0 +1,10 @@
+[build]
+  command = "bun install && bunx prisma generate && bun run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  BUN_VERSION = "latest"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

@@ -1,0 +1,120 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl  = env("DATABASE_URL")
+}
+
+// Maktab modeli
+model School {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  directors Director[]
+  classes   Class[]
+}
+
+// Foydalanuvchi modeli - barcha rollar uchun
+model User {
+  id        String   @id @default(cuid())
+  login     String   @unique
+  password  String
+  role      String   // "admin", "director", "teacher"
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  director Director?
+  teacher  Teacher?
+}
+
+// Direktor modeli
+model Director {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  schoolId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user     User     @relation(fields: [userId], references: [id])
+  school   School   @relation(fields: [schoolId], references: [id])
+  teachers Teacher[]
+}
+
+// O'qituvchi modeli
+model Teacher {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  directorId String
+  subject   String   // Fan nomi
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user         User              @relation(fields: [userId], references: [id])
+  director     Director          @relation(fields: [directorId], references: [id])
+  classTeacher ClassTeacher[]
+  coinHistory  CoinTransaction[]
+}
+
+// Sinf modeli
+model Class {
+  id        String   @id @default(cuid())
+  name      String   // Sinf nomi (masalan: "9-A")
+  schoolId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  school       School        @relation(fields: [schoolId], references: [id])
+  students     Student[]
+  classTeachers ClassTeacher[]
+}
+
+// Sinf-O'qituvchi bog'lash (ko'pdan ko'p)
+model ClassTeacher {
+  id        String   @id @default(cuid())
+  classId   String
+  teacherId String
+  createdAt DateTime @default(now())
+  
+  class   Class   @relation(fields: [classId], references: [id])
+  teacher Teacher @relation(fields: [teacherId], references: [id])
+  
+  @@unique([classId, teacherId])
+}
+
+// O'quvchi modeli
+model Student {
+  id        String   @id @default(cuid())
+  firstName String   // Ismi
+  lastName  String   // Familiyasi
+  middleName String? // Otasining ismi
+  classId   String
+  coins     Int      @default(0) // Jami tangalar
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  class        Class             @relation(fields: [classId], references: [id])
+  coinHistory  CoinTransaction[]
+}
+
+// Coin tarixi
+model CoinTransaction {
+  id        String   @id @default(cuid())
+  studentId String
+  teacherId String
+  amount    Int      // +1 yoki -1
+  reason    String?  // Sabab
+  createdAt DateTime @default(now())
+  
+  student Student @relation(fields: [studentId], references: [id])
+  teacher Teacher @relation(fields: [teacherId], references: [id])
+}
